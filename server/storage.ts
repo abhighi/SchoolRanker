@@ -5,9 +5,16 @@ import {
   type Mark, type InsertMark,
   type Attendance, type InsertAttendance,
   type CourseEnrollment, type InsertCourseEnrollment,
-  type StudentWithGPA, type SubjectTopper
+  type User, type InsertUser,
+  type Assignment, type InsertAssignment,
+  type AssignmentSubmission, type InsertAssignmentSubmission,
+  type StudentWithGPA, type SubjectTopper,
+  students, teachers, courses, marks, attendance, courseEnrollments, 
+  users, assignments, assignmentSubmissions
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Student operations
@@ -63,248 +70,346 @@ export interface IStorage {
   getEnrollmentsByStudent(studentId: string): Promise<CourseEnrollment[]>;
   getEnrollmentsByCourse(courseId: string): Promise<CourseEnrollment[]>;
   
+  // User operations
+  getUser(id: string): Promise<User | undefined>;
+  getAllUsers(): Promise<User[]>;
+  getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<boolean>;
+  
+  // Assignment operations
+  getAssignment(id: string): Promise<Assignment | undefined>;
+  getAllAssignments(): Promise<Assignment[]>;
+  createAssignment(assignment: InsertAssignment): Promise<Assignment>;
+  updateAssignment(id: string, assignment: Partial<InsertAssignment>): Promise<Assignment | undefined>;
+  deleteAssignment(id: string): Promise<boolean>;
+  getAssignmentsByTeacher(teacherId: string): Promise<Assignment[]>;
+  getAssignmentsByCourse(courseId: string): Promise<Assignment[]>;
+  
+  // Assignment Submission operations
+  getAssignmentSubmission(id: string): Promise<AssignmentSubmission | undefined>;
+  getAllAssignmentSubmissions(): Promise<AssignmentSubmission[]>;
+  createAssignmentSubmission(submission: InsertAssignmentSubmission): Promise<AssignmentSubmission>;
+  updateAssignmentSubmission(id: string, submission: Partial<InsertAssignmentSubmission>): Promise<AssignmentSubmission | undefined>;
+  deleteAssignmentSubmission(id: string): Promise<boolean>;
+  getSubmissionsByStudent(studentId: string): Promise<AssignmentSubmission[]>;
+  getSubmissionsByAssignment(assignmentId: string): Promise<AssignmentSubmission[]>;
+
   // Analytics operations
   getStudentsWithGPA(): Promise<StudentWithGPA[]>;
   getSubjectToppers(): Promise<SubjectTopper[]>;
   getAttendanceStats(): Promise<{ totalClasses: number; presentClasses: number; percentage: number }>;
 }
 
-export class MemStorage implements IStorage {
-  private students: Map<string, Student> = new Map();
-  private teachers: Map<string, Teacher> = new Map();
-  private courses: Map<string, Course> = new Map();
-  private marks: Map<string, Mark> = new Map();
-  private attendance: Map<string, Attendance> = new Map();
-  private courseEnrollments: Map<string, CourseEnrollment> = new Map();
+// MemStorage removed - using DatabaseStorage only
 
-  constructor() {
-    // Initialize with empty data
-  }
-
+export class DatabaseStorage implements IStorage {
   // Student operations
   async getStudent(id: string): Promise<Student | undefined> {
-    return this.students.get(id);
+    const [student] = await db.select().from(students).where(eq(students.id, id));
+    return student || undefined;
   }
 
   async getAllStudents(): Promise<Student[]> {
-    return Array.from(this.students.values());
+    return await db.select().from(students);
   }
 
   async getStudentByStudentId(studentId: string): Promise<Student | undefined> {
-    return Array.from(this.students.values()).find(student => student.studentId === studentId);
+    const [student] = await db.select().from(students).where(eq(students.studentId, studentId));
+    return student || undefined;
   }
 
   async createStudent(insertStudent: InsertStudent): Promise<Student> {
-    const id = randomUUID();
-    const student: Student = { ...insertStudent, id };
-    this.students.set(id, student);
+    const [student] = await db.insert(students).values(insertStudent).returning();
     return student;
   }
 
   async updateStudent(id: string, updateData: Partial<InsertStudent>): Promise<Student | undefined> {
-    const student = this.students.get(id);
-    if (!student) return undefined;
-    
-    const updatedStudent = { ...student, ...updateData };
-    this.students.set(id, updatedStudent);
-    return updatedStudent;
+    const [student] = await db.update(students).set(updateData).where(eq(students.id, id)).returning();
+    return student || undefined;
   }
 
   async deleteStudent(id: string): Promise<boolean> {
-    return this.students.delete(id);
+    const result = await db.delete(students).where(eq(students.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Teacher operations
   async getTeacher(id: string): Promise<Teacher | undefined> {
-    return this.teachers.get(id);
+    const [teacher] = await db.select().from(teachers).where(eq(teachers.id, id));
+    return teacher || undefined;
   }
 
   async getAllTeachers(): Promise<Teacher[]> {
-    return Array.from(this.teachers.values());
+    return await db.select().from(teachers);
   }
 
   async getTeacherByTeacherId(teacherId: string): Promise<Teacher | undefined> {
-    return Array.from(this.teachers.values()).find(teacher => teacher.teacherId === teacherId);
+    const [teacher] = await db.select().from(teachers).where(eq(teachers.teacherId, teacherId));
+    return teacher || undefined;
   }
 
   async createTeacher(insertTeacher: InsertTeacher): Promise<Teacher> {
-    const id = randomUUID();
-    const teacher: Teacher = { ...insertTeacher, id };
-    this.teachers.set(id, teacher);
+    const [teacher] = await db.insert(teachers).values(insertTeacher).returning();
     return teacher;
   }
 
   async updateTeacher(id: string, updateData: Partial<InsertTeacher>): Promise<Teacher | undefined> {
-    const teacher = this.teachers.get(id);
-    if (!teacher) return undefined;
-    
-    const updatedTeacher = { ...teacher, ...updateData };
-    this.teachers.set(id, updatedTeacher);
-    return updatedTeacher;
+    const [teacher] = await db.update(teachers).set(updateData).where(eq(teachers.id, id)).returning();
+    return teacher || undefined;
   }
 
   async deleteTeacher(id: string): Promise<boolean> {
-    return this.teachers.delete(id);
+    const result = await db.delete(teachers).where(eq(teachers.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   // Course operations
   async getCourse(id: string): Promise<Course | undefined> {
-    return this.courses.get(id);
+    const [course] = await db.select().from(courses).where(eq(courses.id, id));
+    return course || undefined;
   }
 
   async getAllCourses(): Promise<Course[]> {
-    return Array.from(this.courses.values());
+    return await db.select().from(courses);
   }
 
   async getCourseByCourseCode(courseCode: string): Promise<Course | undefined> {
-    return Array.from(this.courses.values()).find(course => course.courseCode === courseCode);
+    const [course] = await db.select().from(courses).where(eq(courses.courseCode, courseCode));
+    return course || undefined;
   }
 
   async createCourse(insertCourse: InsertCourse): Promise<Course> {
-    const id = randomUUID();
-    const course: Course = { ...insertCourse, id };
-    this.courses.set(id, course);
+    const [course] = await db.insert(courses).values(insertCourse).returning();
     return course;
   }
 
   async updateCourse(id: string, updateData: Partial<InsertCourse>): Promise<Course | undefined> {
-    const course = this.courses.get(id);
-    if (!course) return undefined;
-    
-    const updatedCourse = { ...course, ...updateData };
-    this.courses.set(id, updatedCourse);
-    return updatedCourse;
+    const [course] = await db.update(courses).set(updateData).where(eq(courses.id, id)).returning();
+    return course || undefined;
   }
 
   async deleteCourse(id: string): Promise<boolean> {
-    return this.courses.delete(id);
+    const result = await db.delete(courses).where(eq(courses.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getCoursesByGrade(grade: number): Promise<Course[]> {
-    return Array.from(this.courses.values()).filter(course => course.grade === grade);
+    return await db.select().from(courses).where(eq(courses.grade, grade));
   }
 
   async getCoursesByTeacher(teacherId: string): Promise<Course[]> {
-    return Array.from(this.courses.values()).filter(course => course.teacherId === teacherId);
+    return await db.select().from(courses).where(eq(courses.teacherId, teacherId));
   }
 
   // Mark operations
   async getMark(id: string): Promise<Mark | undefined> {
-    return this.marks.get(id);
+    const [mark] = await db.select().from(marks).where(eq(marks.id, id));
+    return mark || undefined;
   }
 
   async getAllMarks(): Promise<Mark[]> {
-    return Array.from(this.marks.values());
+    return await db.select().from(marks);
   }
 
   async createMark(insertMark: InsertMark): Promise<Mark> {
-    const id = randomUUID();
-    const mark: Mark = { ...insertMark, id };
-    this.marks.set(id, mark);
+    const [mark] = await db.insert(marks).values(insertMark).returning();
     return mark;
   }
 
   async updateMark(id: string, updateData: Partial<InsertMark>): Promise<Mark | undefined> {
-    const mark = this.marks.get(id);
-    if (!mark) return undefined;
-    
-    const updatedMark = { ...mark, ...updateData };
-    this.marks.set(id, updatedMark);
-    return updatedMark;
+    const [mark] = await db.update(marks).set(updateData).where(eq(marks.id, id)).returning();
+    return mark || undefined;
   }
 
   async deleteMark(id: string): Promise<boolean> {
-    return this.marks.delete(id);
+    const result = await db.delete(marks).where(eq(marks.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getMarksByStudent(studentId: string): Promise<Mark[]> {
-    return Array.from(this.marks.values()).filter(mark => mark.studentId === studentId);
+    return await db.select().from(marks).where(eq(marks.studentId, studentId));
   }
 
   async getMarksByCourse(courseId: string): Promise<Mark[]> {
-    return Array.from(this.marks.values()).filter(mark => mark.courseId === courseId);
+    return await db.select().from(marks).where(eq(marks.courseId, courseId));
   }
 
   // Attendance operations
   async getAttendance(id: string): Promise<Attendance | undefined> {
-    return this.attendance.get(id);
+    const [att] = await db.select().from(attendance).where(eq(attendance.id, id));
+    return att || undefined;
   }
 
   async getAllAttendance(): Promise<Attendance[]> {
-    return Array.from(this.attendance.values());
+    return await db.select().from(attendance);
   }
 
   async createAttendance(insertAttendance: InsertAttendance): Promise<Attendance> {
-    const id = randomUUID();
-    const attendance: Attendance = { ...insertAttendance, id };
-    this.attendance.set(id, attendance);
-    return attendance;
+    const [att] = await db.insert(attendance).values(insertAttendance).returning();
+    return att;
   }
 
   async updateAttendance(id: string, updateData: Partial<InsertAttendance>): Promise<Attendance | undefined> {
-    const attendance = this.attendance.get(id);
-    if (!attendance) return undefined;
-    
-    const updatedAttendance = { ...attendance, ...updateData };
-    this.attendance.set(id, updatedAttendance);
-    return updatedAttendance;
+    const [att] = await db.update(attendance).set(updateData).where(eq(attendance.id, id)).returning();
+    return att || undefined;
   }
 
   async deleteAttendance(id: string): Promise<boolean> {
-    return this.attendance.delete(id);
+    const result = await db.delete(attendance).where(eq(attendance.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getAttendanceByStudent(studentId: string): Promise<Attendance[]> {
-    return Array.from(this.attendance.values()).filter(att => att.studentId === studentId);
+    return await db.select().from(attendance).where(eq(attendance.studentId, studentId));
   }
 
   async getAttendanceByCourse(courseId: string): Promise<Attendance[]> {
-    return Array.from(this.attendance.values()).filter(att => att.courseId === courseId);
+    return await db.select().from(attendance).where(eq(attendance.courseId, courseId));
   }
 
   // Course Enrollment operations
   async getCourseEnrollment(id: string): Promise<CourseEnrollment | undefined> {
-    return this.courseEnrollments.get(id);
+    const [enrollment] = await db.select().from(courseEnrollments).where(eq(courseEnrollments.id, id));
+    return enrollment || undefined;
   }
 
   async getAllCourseEnrollments(): Promise<CourseEnrollment[]> {
-    return Array.from(this.courseEnrollments.values());
+    return await db.select().from(courseEnrollments);
   }
 
   async createCourseEnrollment(insertEnrollment: InsertCourseEnrollment): Promise<CourseEnrollment> {
-    const id = randomUUID();
-    const enrollment: CourseEnrollment = { ...insertEnrollment, id };
-    this.courseEnrollments.set(id, enrollment);
+    const [enrollment] = await db.insert(courseEnrollments).values(insertEnrollment).returning();
     return enrollment;
   }
 
   async updateCourseEnrollment(id: string, updateData: Partial<InsertCourseEnrollment>): Promise<CourseEnrollment | undefined> {
-    const enrollment = this.courseEnrollments.get(id);
-    if (!enrollment) return undefined;
-    
-    const updatedEnrollment = { ...enrollment, ...updateData };
-    this.courseEnrollments.set(id, updatedEnrollment);
-    return updatedEnrollment;
+    const [enrollment] = await db.update(courseEnrollments).set(updateData).where(eq(courseEnrollments.id, id)).returning();
+    return enrollment || undefined;
   }
 
   async deleteCourseEnrollment(id: string): Promise<boolean> {
-    return this.courseEnrollments.delete(id);
+    const result = await db.delete(courseEnrollments).where(eq(courseEnrollments.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getEnrollmentsByStudent(studentId: string): Promise<CourseEnrollment[]> {
-    return Array.from(this.courseEnrollments.values()).filter(enrollment => enrollment.studentId === studentId);
+    return await db.select().from(courseEnrollments).where(eq(courseEnrollments.studentId, studentId));
   }
 
   async getEnrollmentsByCourse(courseId: string): Promise<CourseEnrollment[]> {
-    return Array.from(this.courseEnrollments.values()).filter(enrollment => enrollment.courseId === courseId);
+    return await db.select().from(courseEnrollments).where(eq(courseEnrollments.courseId, courseId));
+  }
+
+  // User operations
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateUser(id: string, updateData: Partial<InsertUser>): Promise<User | undefined> {
+    const [user] = await db.update(users).set(updateData).where(eq(users.id, id)).returning();
+    return user || undefined;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Assignment operations
+  async getAssignment(id: string): Promise<Assignment | undefined> {
+    const [assignment] = await db.select().from(assignments).where(eq(assignments.id, id));
+    return assignment || undefined;
+  }
+
+  async getAllAssignments(): Promise<Assignment[]> {
+    return await db.select().from(assignments).orderBy(desc(assignments.createdAt));
+  }
+
+  async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
+    const [assignment] = await db.insert(assignments).values(insertAssignment).returning();
+    return assignment;
+  }
+
+  async updateAssignment(id: string, updateData: Partial<InsertAssignment>): Promise<Assignment | undefined> {
+    const [assignment] = await db.update(assignments).set(updateData).where(eq(assignments.id, id)).returning();
+    return assignment || undefined;
+  }
+
+  async deleteAssignment(id: string): Promise<boolean> {
+    const result = await db.delete(assignments).where(eq(assignments.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getAssignmentsByTeacher(teacherId: string): Promise<Assignment[]> {
+    return await db.select().from(assignments).where(eq(assignments.teacherId, teacherId)).orderBy(desc(assignments.createdAt));
+  }
+
+  async getAssignmentsByCourse(courseId: string): Promise<Assignment[]> {
+    return await db.select().from(assignments).where(eq(assignments.courseId, courseId)).orderBy(desc(assignments.createdAt));
+  }
+
+  // Assignment Submission operations
+  async getAssignmentSubmission(id: string): Promise<AssignmentSubmission | undefined> {
+    const [submission] = await db.select().from(assignmentSubmissions).where(eq(assignmentSubmissions.id, id));
+    return submission || undefined;
+  }
+
+  async getAllAssignmentSubmissions(): Promise<AssignmentSubmission[]> {
+    return await db.select().from(assignmentSubmissions);
+  }
+
+  async createAssignmentSubmission(insertSubmission: InsertAssignmentSubmission): Promise<AssignmentSubmission> {
+    const [submission] = await db.insert(assignmentSubmissions).values(insertSubmission).returning();
+    return submission;
+  }
+
+  async updateAssignmentSubmission(id: string, updateData: Partial<InsertAssignmentSubmission>): Promise<AssignmentSubmission | undefined> {
+    const [submission] = await db.update(assignmentSubmissions).set(updateData).where(eq(assignmentSubmissions.id, id)).returning();
+    return submission || undefined;
+  }
+
+  async deleteAssignmentSubmission(id: string): Promise<boolean> {
+    const result = await db.delete(assignmentSubmissions).where(eq(assignmentSubmissions.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getSubmissionsByStudent(studentId: string): Promise<AssignmentSubmission[]> {
+    return await db.select().from(assignmentSubmissions).where(eq(assignmentSubmissions.studentId, studentId));
+  }
+
+  async getSubmissionsByAssignment(assignmentId: string): Promise<AssignmentSubmission[]> {
+    return await db.select().from(assignmentSubmissions).where(eq(assignmentSubmissions.assignmentId, assignmentId));
   }
 
   // Analytics operations
   async getStudentsWithGPA(): Promise<StudentWithGPA[]> {
-    const students = await this.getAllStudents();
+    const allStudents = await this.getAllStudents();
     const studentsWithGPA: StudentWithGPA[] = [];
 
-    for (const student of students) {
+    for (const student of allStudents) {
       const studentMarks = await this.getMarksByStudent(student.id);
       
       if (studentMarks.length === 0) {
@@ -327,7 +432,7 @@ export class MemStorage implements IStorage {
         totalMarksSum += marksNum;
       }
 
-      const gpa = (totalPercentage / studentMarks.length) / 25; // Convert to 4.0 scale
+      const gpa = (totalPercentage / studentMarks.length) / 25;
       
       studentsWithGPA.push({
         ...student,
@@ -340,10 +445,10 @@ export class MemStorage implements IStorage {
   }
 
   async getSubjectToppers(): Promise<SubjectTopper[]> {
-    const courses = await this.getAllCourses();
+    const allCourses = await this.getAllCourses();
     const toppers: SubjectTopper[] = [];
 
-    for (const course of courses) {
+    for (const course of allCourses) {
       const courseMarks = await this.getMarksByCourse(course.id);
       
       if (courseMarks.length === 0) continue;
@@ -366,7 +471,7 @@ export class MemStorage implements IStorage {
       let bestStudentId = '';
       let bestPercentage = 0;
 
-      for (const [studentId, performance] of studentPerformance) {
+      for (const [studentId, performance] of Array.from(studentPerformance.entries())) {
         const percentage = (performance.totalMarks / performance.totalPossible) * 100;
         if (percentage > bestPercentage) {
           bestPercentage = percentage;
@@ -404,4 +509,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

@@ -3,7 +3,8 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
   insertStudentSchema, insertTeacherSchema, insertCourseSchema, 
-  insertMarkSchema, insertAttendanceSchema, insertCourseEnrollmentSchema
+  insertMarkSchema, insertAttendanceSchema, insertCourseEnrollmentSchema,
+  insertUserSchema, insertAssignmentSchema, insertAssignmentSubmissionSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -348,6 +349,146 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
       res.status(500).json({ message: "Failed to create enrollment" });
+    }
+  });
+
+  // User routes
+  app.get("/api/users", async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      res.json(users.map(user => ({ ...user, password: undefined }))); // Don't send passwords
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/users", async (req, res) => {
+    try {
+      const validatedData = insertUserSchema.parse(req.body);
+      const user = await storage.createUser(validatedData);
+      res.status(201).json({ ...user, password: undefined }); // Don't send password
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create user" });
+    }
+  });
+
+  // Assignment routes
+  app.get("/api/assignments", async (req, res) => {
+    try {
+      const assignments = await storage.getAllAssignments();
+      res.json(assignments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch assignments" });
+    }
+  });
+
+  app.get("/api/assignments/teacher/:teacherId", async (req, res) => {
+    try {
+      const assignments = await storage.getAssignmentsByTeacher(req.params.teacherId);
+      res.json(assignments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch teacher assignments" });
+    }
+  });
+
+  app.get("/api/assignments/course/:courseId", async (req, res) => {
+    try {
+      const assignments = await storage.getAssignmentsByCourse(req.params.courseId);
+      res.json(assignments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch course assignments" });
+    }
+  });
+
+  app.post("/api/assignments", async (req, res) => {
+    try {
+      const validatedData = insertAssignmentSchema.parse(req.body);
+      const assignment = await storage.createAssignment(validatedData);
+      res.status(201).json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create assignment" });
+    }
+  });
+
+  app.put("/api/assignments/:id", async (req, res) => {
+    try {
+      const validatedData = insertAssignmentSchema.partial().parse(req.body);
+      const assignment = await storage.updateAssignment(req.params.id, validatedData);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      res.json(assignment);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update assignment" });
+    }
+  });
+
+  app.delete("/api/assignments/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteAssignment(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      res.json({ message: "Assignment deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete assignment" });
+    }
+  });
+
+  // Assignment Submission routes
+  app.get("/api/assignment-submissions/student/:studentId", async (req, res) => {
+    try {
+      const submissions = await storage.getSubmissionsByStudent(req.params.studentId);
+      res.json(submissions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch student submissions" });
+    }
+  });
+
+  app.get("/api/assignment-submissions/assignment/:assignmentId", async (req, res) => {
+    try {
+      const submissions = await storage.getSubmissionsByAssignment(req.params.assignmentId);
+      res.json(submissions);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch assignment submissions" });
+    }
+  });
+
+  app.post("/api/assignment-submissions", async (req, res) => {
+    try {
+      const validatedData = insertAssignmentSubmissionSchema.parse(req.body);
+      const submission = await storage.createAssignmentSubmission(validatedData);
+      res.status(201).json(submission);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create submission" });
+    }
+  });
+
+  app.put("/api/assignment-submissions/:id", async (req, res) => {
+    try {
+      const validatedData = insertAssignmentSubmissionSchema.partial().parse(req.body);
+      const submission = await storage.updateAssignmentSubmission(req.params.id, validatedData);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+      res.json(submission);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update submission" });
     }
   });
 

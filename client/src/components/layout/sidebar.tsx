@@ -5,7 +5,7 @@ import { useState } from "react";
 import { 
   GraduationCap, Home, Users, Presentation, 
   BookOpen, CalendarCheck, BarChart3, TrendingUp, 
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, UserCheck, GraduationCapIcon
 } from "lucide-react";
 
 const navigationItems = [
@@ -46,6 +46,21 @@ const navigationItems = [
   },
 ];
 
+const rolePanels = [
+  {
+    name: "Teacher Panel",
+    href: "/teacher-panel",
+    icon: Presentation,
+    description: "For Teachers"
+  },
+  {
+    name: "Student Panel", 
+    href: "/student-panel",
+    icon: GraduationCapIcon,
+    description: "For Students"
+  },
+];
+
 export function Sidebar() {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -82,26 +97,71 @@ export function Sidebar() {
       </div>
       
       {/* Navigation Menu */}
-      <nav className="flex-1 px-2 py-6 space-y-2">
-        {navigationItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = location === item.href;
-          
-          return (
-            <Link key={item.href} href={item.href}>
-              <div
-                className={cn(
-                  "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
-                  isActive && "bg-primary text-white hover:bg-blue-600 hover:text-white",
-                  isCollapsed ? "justify-center" : "space-x-3"
-                )}
-              >
-                <Icon className="w-5 h-5 text-current flex-shrink-0" />
-                {!isCollapsed && <span>{item.name}</span>}
-              </div>
-            </Link>
-          );
-        })}
+      <nav className="flex-1 px-2 py-6 space-y-4">
+        {/* Admin Section */}
+        <div className="space-y-2">
+          {!isCollapsed && (
+            <div className="px-3 py-2">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Administration
+              </h3>
+            </div>
+          )}
+          {navigationItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location === item.href;
+            
+            return (
+              <Link key={item.href} href={item.href}>
+                <div
+                  className={cn(
+                    "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
+                    isActive && "bg-primary text-white hover:bg-blue-600 hover:text-white",
+                    isCollapsed ? "justify-center" : "space-x-3"
+                  )}
+                >
+                  <Icon className="w-5 h-5 text-current flex-shrink-0" />
+                  {!isCollapsed && <span>{item.name}</span>}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+
+        {/* Role Panels Section */}
+        <div className="space-y-2 border-t border-gray-200 pt-4">
+          {!isCollapsed && (
+            <div className="px-3 py-2">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                Role Panels
+              </h3>
+            </div>
+          )}
+          {rolePanels.map((panel) => {
+            const Icon = panel.icon;
+            const isActive = location === panel.href;
+            
+            return (
+              <Link key={panel.href} href={panel.href}>
+                <div
+                  className={cn(
+                    "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
+                    isActive && "bg-green-600 text-white hover:bg-green-700 hover:text-white",
+                    isCollapsed ? "justify-center" : "space-x-3"
+                  )}
+                >
+                  <Icon className="w-5 h-5 text-current flex-shrink-0" />
+                  {!isCollapsed && (
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">{panel.name}</span>
+                      <span className="text-xs opacity-75">{panel.description}</span>
+                    </div>
+                  )}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
       
       {/* User Profile */}

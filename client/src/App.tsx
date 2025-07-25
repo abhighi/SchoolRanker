@@ -11,6 +11,8 @@ import Courses from "@/pages/courses";
 import Attendance from "@/pages/attendance";
 import Marks from "@/pages/marks";
 import Analytics from "@/pages/analytics";
+import TeacherPanel from "@/pages/teacher-panel";
+import StudentPanel from "@/pages/student-panel";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -26,6 +28,8 @@ function Router() {
           <Route path="/attendance" component={Attendance} />
           <Route path="/marks" component={Marks} />
           <Route path="/analytics" component={Analytics} />
+          <Route path="/teacher-panel" component={TeacherPanel} />
+          <Route path="/student-panel" component={StudentPanel} />
           <Route component={NotFound} />
         </Switch>
       </main>

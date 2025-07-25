@@ -85,6 +85,47 @@ export const courseEnrollments = pgTable("course_enrollments", {
   status: varchar("status", { length: 20 }).notNull().default("active"),
 });
 
+// Users table for authentication
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  username: varchar("username").notNull().unique(),
+  email: text("email").notNull().unique(),
+  password: text("password").notNull(),
+  role: varchar("role", { length: 20 }).notNull(), // admin, teacher, student
+  profileId: varchar("profile_id"), // references to students.id or teachers.id
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Assignments table
+export const assignments = pgTable("assignments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  courseId: varchar("course_id").references(() => courses.id).notNull(),
+  teacherId: varchar("teacher_id").references(() => teachers.id).notNull(),
+  dueDate: text("due_date").notNull(),
+  totalPoints: integer("total_points").notNull().default(100),
+  type: varchar("type", { length: 20 }).notNull().default("assignment"), // assignment, homework, project
+  status: varchar("status", { length: 20 }).notNull().default("active"),
+  createdAt: text("created_at").notNull(),
+});
+
+// Assignment Submissions table
+export const assignmentSubmissions = pgTable("assignment_submissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assignmentId: varchar("assignment_id").references(() => assignments.id).notNull(),
+  studentId: varchar("student_id").references(() => students.id).notNull(),
+  submissionText: text("submission_text"),
+  fileUrl: text("file_url"),
+  submittedAt: text("submitted_at"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, submitted, graded, late
+  grade: integer("grade"),
+  feedback: text("feedback"),
+  gradedAt: text("graded_at"),
+  gradedBy: varchar("graded_by").references(() => teachers.id),
+});
+
 // Insert schemas
 export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
@@ -132,6 +173,30 @@ export const insertCourseEnrollmentSchema = createInsertSchema(courseEnrollments
   status: z.enum(["active", "completed", "dropped"]).default("active"),
 });
 
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  email: z.string().email(),
+  role: z.enum(["admin", "teacher", "student"]),
+  status: z.enum(["active", "inactive"]).default("active"),
+});
+
+export const insertAssignmentSchema = createInsertSchema(assignments).omit({
+  id: true,
+}).extend({
+  totalPoints: z.number().min(1).default(100),
+  type: z.enum(["assignment", "homework", "project"]).default("assignment"),
+  status: z.enum(["active", "inactive"]).default("active"),
+});
+
+export const insertAssignmentSubmissionSchema = createInsertSchema(assignmentSubmissions).omit({
+  id: true,
+}).extend({
+  status: z.enum(["pending", "submitted", "graded", "late"]).default("pending"),
+  grade: z.number().min(0).optional(),
+});
+
 // Types
 export type Student = typeof students.$inferSelect;
 export type InsertStudent = z.infer<typeof insertStudentSchema>;
@@ -145,6 +210,12 @@ export type Attendance = typeof attendance.$inferSelect;
 export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type CourseEnrollment = typeof courseEnrollments.$inferSelect;
 export type InsertCourseEnrollment = z.infer<typeof insertCourseEnrollmentSchema>;
+export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type Assignment = typeof assignments.$inferSelect;
+export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;
+export type AssignmentSubmission = typeof assignmentSubmissions.$inferSelect;
+export type InsertAssignmentSubmission = z.infer<typeof insertAssignmentSubmissionSchema>;
 
 // Additional types for rankings
 export type StudentWithGPA = Student & {
