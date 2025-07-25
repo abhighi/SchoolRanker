@@ -86,7 +86,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
         <div className="flex items-center">
           <GraduationCap className="text-primary text-2xl" size={32} />
           {!isCollapsed && (
-            <h1 className="text-xl font-bold text-gray-800 ml-3">EduManage</h1>
+            <h1 className="text-xl font-bold text-gray-800 ml-3">Pathshala Saathi</h1>
           )}
         </div>
         <Button
@@ -104,7 +104,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
       </div>
       
       {/* Navigation Menu */}
-      <nav className="flex-1 px-2 py-6 space-y-4 overflow-y-auto">
+      <nav className="flex-1 px-2 py-6 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
         {/* Navigation based on role */}
         {userRole === 'admin' && (
           <div className="space-y-2">

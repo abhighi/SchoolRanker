@@ -8,9 +8,10 @@ import {
   type User, type InsertUser,
   type Assignment, type InsertAssignment,
   type AssignmentSubmission, type InsertAssignmentSubmission,
+  type Notification, type InsertNotification,
   type StudentWithGPA, type SubjectTopper,
   students, teachers, courses, marks, attendance, courseEnrollments, 
-  users, assignments, assignmentSubmissions
+  users, assignments, assignmentSubmissions, notifications
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
@@ -101,6 +102,12 @@ export interface IStorage {
   getStudentsWithGPA(): Promise<StudentWithGPA[]>;
   getSubjectToppers(): Promise<SubjectTopper[]>;
   getAttendanceStats(): Promise<{ totalClasses: number; presentClasses: number; percentage: number }>;
+
+  // Notification operations
+  getNotificationsByUser(userId: string): Promise<Notification[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  markNotificationAsRead(id: string): Promise<Notification | undefined>;
+  deleteNotification(id: string): Promise<boolean>;
 }
 
 // MemStorage removed - using DatabaseStorage only
@@ -506,6 +513,31 @@ export class DatabaseStorage implements IStorage {
       presentClasses,
       percentage: Math.round(percentage * 100) / 100,
     };
+  }
+
+  // Notification operations
+  async getNotificationsByUser(userId: string): Promise<Notification[]> {
+    return await db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
+    const [notification] = await db.insert(notifications).values(insertNotification).returning();
+    return notification;
+  }
+
+  async markNotificationAsRead(id: string): Promise<Notification | undefined> {
+    const [notification] = await db.update(notifications)
+      .set({ read: true })
+      .where(eq(notifications.id, id))
+      .returning();
+    return notification || undefined;
+  }
+
+  async deleteNotification(id: string): Promise<boolean> {
+    const result = await db.delete(notifications).where(eq(notifications.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 

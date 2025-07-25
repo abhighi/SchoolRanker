@@ -4,7 +4,8 @@ import { storage } from "./storage";
 import { 
   insertStudentSchema, insertTeacherSchema, insertCourseSchema, 
   insertMarkSchema, insertAttendanceSchema, insertCourseEnrollmentSchema,
-  insertUserSchema, insertAssignmentSchema, insertAssignmentSubmissionSchema
+  insertUserSchema, insertAssignmentSchema, insertAssignmentSubmissionSchema,
+  insertNotificationSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -539,6 +540,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(stats);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch dashboard stats" });
+    }
+  });
+
+  // Notification routes
+  app.get("/api/notifications/:userId", async (req, res) => {
+    try {
+      const notifications = await storage.getNotificationsByUser(req.params.userId);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch notifications" });
+    }
+  });
+
+  app.post("/api/notifications", async (req, res) => {
+    try {
+      const validatedData = insertNotificationSchema.parse(req.body);
+      const notification = await storage.createNotification(validatedData);
+      res.status(201).json(notification);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create notification" });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", async (req, res) => {
+    try {
+      const notification = await storage.markNotificationAsRead(req.params.id);
+      if (!notification) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      res.json(notification);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to update notification" });
+    }
+  });
+
+  app.delete("/api/notifications/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteNotification(req.params.id);
+      if (!success) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+      res.json({ message: "Notification deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete notification" });
+    }
+  });
+
+  // Authentication routes (mock for now)
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password, role } = req.body;
+      
+      // Mock authentication - in production, you'd validate against database
+      const mockUsers = {
+        admin: { username: "admin", password: "admin123", id: "admin-001", role: "admin" },
+        teacher: { username: "teacher", password: "teacher123", id: "teacher-001", role: "teacher" },
+        student: { username: "student", password: "student123", id: "student-001", role: "student" }
+      };
+
+      const user = mockUsers[role as keyof typeof mockUsers];
+      if (user && username === user.username && password === user.password) {
+        res.json({
+          id: user.id,
+          role: user.role,
+          username: user.username,
+          success: true
+        });
+      } else {
+        res.status(401).json({ message: "Invalid credentials" });
+      }
+    } catch (error) {
+      res.status(500).json({ message: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/signup", async (req, res) => {
+    try {
+      const { email, password, role } = req.body;
+      
+      // Mock signup - in production, you'd save to database
+      // For now, we'll just simulate user creation
+      const newUser = {
+        id: `${role}-${Date.now()}`,
+        email,
+        role,
+        username: email.split('@')[0],
+        success: true
+      };
+
+      res.status(201).json(newUser);
+    } catch (error) {
+      res.status(500).json({ message: "Signup failed" });
     }
   });
 

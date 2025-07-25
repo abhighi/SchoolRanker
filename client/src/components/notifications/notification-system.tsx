@@ -2,8 +2,11 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Bell, X, Clock, CheckCircle, AlertTriangle, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface Notification {
   id: string;
@@ -13,6 +16,7 @@ export interface Notification {
   timestamp: Date;
   read: boolean;
   actionUrl?: string;
+  userId: string;
 }
 
 interface NotificationSystemProps {
@@ -21,158 +25,73 @@ interface NotificationSystemProps {
 }
 
 export function NotificationSystem({ userRole, userId }: NotificationSystemProps) {
-  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  // Generate sample notifications based on user role
-  useEffect(() => {
-    const generateNotifications = () => {
-      const baseNotifications: Notification[] = [];
-      
-      if (userRole === 'student') {
-        baseNotifications.push(
-          {
-            id: '1',
-            title: 'Assignment Due Tomorrow',
-            message: 'Your Math homework is due tomorrow at 11:59 PM',
-            type: 'warning',
-            timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-            read: false,
-            actionUrl: '/student-panel'
-          },
-          {
-            id: '2',
-            title: 'New Assignment Posted',
-            message: 'Science project has been assigned - Due in 1 week',
-            type: 'info',
-            timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
-            read: false,
-            actionUrl: '/student-panel'
-          },
-          {
-            id: '3',
-            title: 'Grade Updated',
-            message: 'Your English essay has been graded - 95/100',
-            type: 'success',
-            timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
-            read: true
-          }
-        );
-      } else if (userRole === 'teacher') {
-        baseNotifications.push(
-          {
-            id: '4',
-            title: 'New Student Submission',
-            message: '5 students have submitted their assignments',
-            type: 'info',
-            timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
-            read: false,
-            actionUrl: '/teacher-panel'
-          },
-          {
-            id: '5',
-            title: 'Attendance Reminder',
-            message: 'Don\'t forget to mark attendance for today',
-            type: 'warning',
-            timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000), // 3 hours ago
-            read: false,
-            actionUrl: '/teacher-panel'
-          },
-          {
-            id: '6',
-            title: 'Grade Deadline',
-            message: 'Grades for midterm exams are due in 2 days',
-            type: 'warning',
-            timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 hours ago
-            read: true
-          }
-        );
-      } else if (userRole === 'admin') {
-        baseNotifications.push(
-          {
-            id: '7',
-            title: 'System Backup Complete',
-            message: 'Daily system backup completed successfully',
-            type: 'success',
-            timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-            read: false
-          },
-          {
-            id: '8',
-            title: 'New Teacher Registration',
-            message: 'John Smith has registered as a new teacher',
-            type: 'info',
-            timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000), // 5 hours ago
-            read: false,
-            actionUrl: '/teachers'
-          },
-          {
-            id: '9',
-            title: 'Low Attendance Alert',
-            message: 'Class 10-A has attendance below 80% this week',
-            type: 'warning',
-            timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000), // 8 hours ago
-            read: true,
-            actionUrl: '/attendance'
-          }
-        );
-      }
-      
-      setNotifications(baseNotifications);
-    };
+  // Fetch notifications from API
+  const { data: notifications = [] } = useQuery<Notification[]>({
+    queryKey: ['/api/notifications', userId],
+    enabled: !!userId,
+  });
 
-    generateNotifications();
-  }, [userRole]);
+  // Mark notification as read
+  const markAsReadMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      return apiRequest('PATCH', `/api/notifications/${notificationId}/read`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications', userId] });
+    },
+  });
 
-  // Show toast notifications for new unread notifications
-  useEffect(() => {
-    const unreadNotifications = notifications.filter(n => !n.read);
-    if (unreadNotifications.length > 0 && notifications.length > 0) {
-      // Show toast for the most recent unread notification
-      const latest = unreadNotifications[0];
-      toast({
-        title: latest.title,
-        description: latest.message,
-        variant: latest.type === 'error' ? 'destructive' : 'default'
-      });
-    }
-  }, [notifications, toast]);
+  // Delete notification
+  const deleteNotificationMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      return apiRequest('DELETE', `/api/notifications/${notificationId}`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications', userId] });
+    },
+  });
 
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const markAsRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(n => n.id === id ? { ...n, read: true } : n)
-    );
+  const handleMarkAsRead = (notificationId: string) => {
+    markAsReadMutation.mutate(notificationId);
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+  const handleDelete = (notificationId: string) => {
+    deleteNotificationMutation.mutate(notificationId);
   };
 
-  const deleteNotification = (id: string) => {
-    setNotifications(prev => prev.filter(n => n.id !== id));
-  };
-
-  const getNotificationIcon = (type: Notification['type']) => {
+  const getIcon = (type: string) => {
     switch (type) {
-      case 'success': return <CheckCircle className="w-4 h-4 text-green-600" />;
-      case 'warning': return <AlertTriangle className="w-4 h-4 text-yellow-600" />;
-      case 'error': return <AlertTriangle className="w-4 h-4 text-red-600" />;
-      default: return <Info className="w-4 h-4 text-blue-600" />;
+      case 'success':
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'warning':
+        return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
+      case 'error':
+        return <AlertTriangle className="h-4 w-4 text-red-500" />;
+      default:
+        return <Info className="h-4 w-4 text-blue-500" />;
     }
   };
 
-  const formatTimeAgo = (timestamp: Date) => {
+  const formatTimestamp = (timestamp: Date) => {
     const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffHours / 24);
+    const diff = now.getTime() - new Date(timestamp).getTime();
+    const minutes = Math.floor(diff / (1000 * 60));
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
-    if (diffDays > 0) return `${diffDays}d ago`;
-    if (diffHours > 0) return `${diffHours}h ago`;
-    return 'Just now';
+    if (minutes < 60) {
+      return `${minutes}m ago`;
+    } else if (hours < 24) {
+      return `${hours}h ago`;
+    } else {
+      return `${days}d ago`;
+    }
   };
 
   return (
@@ -181,99 +100,105 @@ export function NotificationSystem({ userRole, userId }: NotificationSystemProps
         variant="ghost"
         size="sm"
         onClick={() => setShowDropdown(!showDropdown)}
-        className="relative"
+        className="relative p-2"
+        data-testid="button-notifications"
       >
-        <Bell className="w-5 h-5" />
+        <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-red-500">
-            {unreadCount > 9 ? '9+' : unreadCount}
+          <Badge
+            variant="destructive"
+            className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs p-0"
+          >
+            {unreadCount}
           </Badge>
         )}
       </Button>
 
       {showDropdown && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-900 dark:text-white">Notifications</h3>
-              {unreadCount > 0 && (
-                <Button variant="ghost" size="sm" onClick={markAllAsRead}>
-                  Mark all read
-                </Button>
-              )}
-            </div>
+        <div className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+          <div className="flex items-center justify-between p-4 border-b">
+            <h3 className="font-semibold text-gray-900">Notifications</h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDropdown(false)}
+              className="p-1"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
 
-          <div className="max-h-96 overflow-y-auto">
+          <ScrollArea className="max-h-96">
             {notifications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>No notifications</p>
+              <div className="p-4 text-center text-gray-500">
+                <Bell className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                <p>No notifications yet</p>
               </div>
             ) : (
-              notifications.map((notification) => (
-                <div
-                  key={notification.id}
-                  className={`p-4 border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 ${
-                    !notification.read ? 'bg-blue-50 dark:bg-blue-950' : ''
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2 mb-1">
-                        {getNotificationIcon(notification.type)}
-                        <h4 className="text-sm font-medium text-gray-900 dark:text-white">
-                          {notification.title}
-                        </h4>
-                        {!notification.read && (
-                          <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                        {notification.message}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-gray-500">
-                          {formatTimeAgo(notification.timestamp)}
-                        </span>
-                        <div className="flex space-x-1">
+              <div className="divide-y divide-gray-100">
+                {notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`p-4 hover:bg-gray-50 ${
+                      !notification.read ? 'bg-blue-50' : ''
+                    }`}
+                  >
+                    <div className="flex items-start space-x-3">
+                      {getIcon(notification.type)}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {notification.title}
+                          </p>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs text-gray-500">
+                              {formatTimestamp(notification.timestamp)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(notification.id)}
+                              className="p-1 h-6 w-6"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {notification.message}
+                        </p>
+                        <div className="flex items-center justify-between mt-2">
+                          {notification.actionUrl && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs"
+                              onClick={() => {
+                                window.location.href = notification.actionUrl!;
+                                setShowDropdown(false);
+                              }}
+                            >
+                              View Details
+                            </Button>
+                          )}
                           {!notification.read && (
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => markAsRead(notification.id)}
-                              className="text-xs h-6 px-2"
+                              onClick={() => handleMarkAsRead(notification.id)}
+                              className="text-xs text-blue-600"
                             >
-                              Mark read
+                              Mark as read
                             </Button>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteNotification(notification.id)}
-                            className="text-xs h-6 px-2 text-red-600 hover:text-red-700"
-                          >
-                            <X className="w-3 h-3" />
-                          </Button>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
-          </div>
-
-          <div className="p-3 border-t border-gray-200 dark:border-gray-700">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-center"
-              onClick={() => setShowDropdown(false)}
-            >
-              Close
-            </Button>
-          </div>
+          </ScrollArea>
         </div>
       )}
     </div>

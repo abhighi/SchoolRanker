@@ -1,10 +1,15 @@
 import { useState, useEffect } from "react";
+import { apiRequest } from "@/lib/queryClient";
 
 export type UserRole = 'admin' | 'teacher' | 'student';
 
-interface User {
+export interface User {
   id: string;
   role: UserRole;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  username?: string;
 }
 
 export function useAuth() {
@@ -15,13 +20,23 @@ export function useAuth() {
     // Check for existing session
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        const userData = JSON.parse(savedUser);
+        setUser(userData);
+      } catch (error) {
+        console.error('Failed to parse stored user data:', error);
+        localStorage.removeItem('currentUser');
+      }
     }
     setIsLoading(false);
   }, []);
 
-  const login = (userId: string, role: UserRole) => {
-    const userData = { id: userId, role };
+  const login = async (userId: string, role: UserRole, additionalData?: Partial<User>) => {
+    const userData: User = {
+      id: userId,
+      role,
+      ...additionalData
+    };
     setUser(userData);
     localStorage.setItem('currentUser', JSON.stringify(userData));
   };
@@ -29,6 +44,8 @@ export function useAuth() {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('currentUser');
+    // Force page refresh to ensure complete logout
+    window.location.reload();
   };
 
   return {

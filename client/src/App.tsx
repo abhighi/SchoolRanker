@@ -1,10 +1,12 @@
 import { Switch, Route, useLocation } from "wouter";
+import { useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sidebar } from "@/components/layout/sidebar";
 import { LoginForm } from "@/components/auth/login-form";
+import { SignupForm } from "@/components/auth/signup-form";
 import { useAuth, type UserRole } from "@/hooks/useAuth";
 import Dashboard from "@/pages/dashboard";
 import Students from "@/pages/students";
@@ -103,6 +105,7 @@ function Router({ userRole, userId }: RouterProps) {
 
 function App() {
   const { user, isLoading, login } = useAuth();
+  const [showSignup, setShowSignup] = useState(false);
 
   if (isLoading) {
     return (
@@ -120,7 +123,17 @@ function App() {
       <TooltipProvider>
         <Toaster />
         {!user ? (
-          <LoginForm onLogin={login} />
+          showSignup ? (
+            <SignupForm 
+              onSignup={login}
+              onBackToLogin={() => setShowSignup(false)}
+            />
+          ) : (
+            <LoginForm 
+              onLogin={login}
+              onShowSignup={() => setShowSignup(true)}
+            />
+          )
         ) : (
           <Router userRole={user.role} userId={user.id} />
         )}

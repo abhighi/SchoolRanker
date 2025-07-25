@@ -11,9 +11,10 @@ export type UserRole = 'admin' | 'teacher' | 'student';
 
 interface LoginFormProps {
   onLogin: (userId: string, role: UserRole) => void;
+  onShowSignup: () => void;
 }
 
-export function LoginForm({ onLogin }: LoginFormProps) {
+export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("admin");
@@ -71,7 +72,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
               <GraduationCap className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
-          <CardTitle className="text-2xl font-bold">EduManage Login</CardTitle>
+          <CardTitle className="text-2xl font-bold">Pathshala Saathi</CardTitle>
           <p className="text-gray-600 dark:text-gray-400">Select your role and sign in</p>
         </CardHeader>
         <CardContent>
@@ -140,10 +141,24 @@ export function LoginForm({ onLogin }: LoginFormProps) {
               </p>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
+            <Button type="submit" className="w-full" disabled={isLoading} data-testid="button-login">
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
+
+          <div className="mt-4 text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+              Don't have an account?
+            </p>
+            <Button
+              variant="outline"
+              onClick={onShowSignup}
+              className="w-full"
+              data-testid="button-show-signup"
+            >
+              Create Account
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>
