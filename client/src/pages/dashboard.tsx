@@ -1,7 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Header } from "@/components/layout/header";
 import { StudentForm } from "@/components/forms/student-form";
+import { TeacherForm } from "@/components/forms/teacher-form";
+import { CourseForm } from "@/components/forms/course-form";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -15,8 +18,16 @@ import type { StudentWithGPA, SubjectTopper } from "@shared/schema";
 
 export default function Dashboard() {
   const [showStudentForm, setShowStudentForm] = useState(false);
+  const [showTeacherForm, setShowTeacherForm] = useState(false);
+  const [showCourseForm, setShowCourseForm] = useState(false);
+  const [, setLocation] = useLocation();
 
-  const { data: dashboardStats, isLoading: statsLoading } = useQuery({
+  const { data: dashboardStats, isLoading: statsLoading } = useQuery<{
+    totalStudents: number;
+    activeTeachers: number; 
+    totalCourses: number;
+    avgAttendance: number;
+  }>({
     queryKey: ["/api/analytics/dashboard-stats"],
   });
 
@@ -225,15 +236,24 @@ export default function Dashboard() {
                   <Users className="w-4 h-4 mr-2" />
                   Add New Student
                 </Button>
-                <Button className="w-full bg-green-600 text-white hover:bg-green-700">
+                <Button 
+                  className="w-full bg-green-600 text-white hover:bg-green-700"
+                  onClick={() => setShowTeacherForm(true)}
+                >
                   <GraduationCap className="w-4 h-4 mr-2" />
                   Add New Teacher
                 </Button>
-                <Button className="w-full bg-purple-600 text-white hover:bg-purple-700">
+                <Button 
+                  className="w-full bg-purple-600 text-white hover:bg-purple-700"
+                  onClick={() => setShowCourseForm(true)}
+                >
                   <BookOpen className="w-4 h-4 mr-2" />
                   Create Course
                 </Button>
-                <Button className="w-full bg-orange-600 text-white hover:bg-orange-700">
+                <Button 
+                  className="w-full bg-orange-600 text-white hover:bg-orange-700"
+                  onClick={() => setLocation("/attendance")}
+                >
                   <Calendar className="w-4 h-4 mr-2" />
                   Mark Attendance
                 </Button>
@@ -327,6 +347,15 @@ export default function Dashboard() {
         open={showStudentForm} 
         onOpenChange={setShowStudentForm} 
       />
+      <TeacherForm 
+        open={showTeacherForm} 
+        onOpenChange={setShowTeacherForm} 
+      />
+      <CourseForm 
+        open={showCourseForm} 
+        onOpenChange={setShowCourseForm} 
+      />
+
     </div>
   );
 }
