@@ -27,7 +27,12 @@ import type { StudentWithGPA, SubjectTopper, Student, Teacher, Course } from "@s
 export default function Analytics() {
   const { toast } = useToast();
 
-  const { data: dashboardStats, isLoading: statsLoading } = useQuery({
+  const { data: dashboardStats, isLoading: statsLoading } = useQuery<{
+    totalStudents: number;
+    activeTeachers: number;
+    totalCourses: number;
+    avgAttendance: number;
+  }>({
     queryKey: ["/api/analytics/dashboard-stats"],
   });
 
@@ -104,7 +109,8 @@ export default function Analytics() {
       
       // Subject toppers
       doc.setFontSize(16);
-      doc.text('Subject Toppers', 20, doc.lastAutoTable.finalY + 20);
+      const currentY = (doc as any).lastAutoTable?.finalY || 180;
+      doc.text('Subject Toppers', 20, currentY + 20);
       
       const toppersData = subjectToppers.map(topper => [
         topper.subject,
@@ -115,7 +121,7 @@ export default function Analytics() {
       (doc as any).autoTable({
         head: [['Subject', 'Student Name', 'Percentage']],
         body: toppersData,
-        startY: doc.lastAutoTable.finalY + 30,
+        startY: currentY + 30,
         theme: 'grid'
       });
       
