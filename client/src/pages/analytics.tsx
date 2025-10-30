@@ -308,7 +308,7 @@ export default function Analytics() {
           <CardHeader>
             <CardTitle className="flex items-center">
               <Crown className="w-5 h-5 mr-2 text-yellow-600" />
-              Top 3 Students (Using Quick Sort Algorithm)
+              Top 3 Students
             </CardTitle>
           </CardHeader>
           <CardContent>

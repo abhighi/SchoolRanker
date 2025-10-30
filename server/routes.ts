@@ -1,643 +1,241 @@
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { 
-  insertStudentSchema, insertTeacherSchema, insertCourseSchema, 
-  insertMarkSchema, insertAttendanceSchema, insertCourseEnrollmentSchema,
-  insertUserSchema, insertAssignmentSchema, insertAssignmentSubmissionSchema,
-  insertNotificationSchema
-} from "@shared/schema";
-import { z } from "zod";
+"use client";
 
-export async function registerRoutes(app: Express): Promise<Server> {
-  
-  // Student routes
-  app.get("/api/students", async (req, res) => {
-    try {
-      const students = await storage.getAllStudents();
-      res.json(students);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch students" });
-    }
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { apiRequest } from "@/lib/queryClient";
+import { toast } from "@/components/ui/use-toast";
+
+interface Assignment {
+  id: number;
+  title: string;
+  description: string;
+  dueDate: string;
+}
+
+interface AssignmentSubmission {
+  id: number;
+  assignmentId: number;
+  studentId: string;
+  submissionText: string;
+  grade?: number;
+  createdAt: string;
+}
+
+interface StudentWithGPA {
+  id: string;
+  name: string;
+  gpa: number;
+}
+
+export default function StudentDashboard() {
+  const queryClient = useQueryClient();
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
+  const [showSubmissionForm, setShowSubmissionForm] = useState(false);
+  const studentId = "student-001";
+
+  // Queries
+  const { data: assignments = [] } = useQuery<Assignment[]>({
+    queryKey: ["/api/assignments"],
   });
 
-  app.get("/api/students/:id", async (req, res) => {
-    try {
-      const student = await storage.getStudent(req.params.id);
-      if (!student) {
-        return res.status(404).json({ message: "Student not found" });
-      }
-      res.json(student);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch student" });
-    }
+  const { data: submissions = [] } = useQuery<AssignmentSubmission[]>({
+    queryKey: ["/api/assignment-submissions"],
   });
 
-  app.post("/api/students", async (req, res) => {
-    try {
-      const validatedData = insertStudentSchema.parse(req.body);
-      const student = await storage.createStudent(validatedData);
-      res.status(201).json(student);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create student" });
-    }
+  const { data: studentsWithGPA = [] } = useQuery<StudentWithGPA[]>({
+    queryKey: ["/api/students-with-gpa"],
   });
 
-  app.put("/api/students/:id", async (req, res) => {
-    try {
-      const validatedData = insertStudentSchema.partial().parse(req.body);
-      const student = await storage.updateStudent(req.params.id, validatedData);
-      if (!student) {
-        return res.status(404).json({ message: "Student not found" });
-      }
-      res.json(student);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update student" });
-    }
+  const currentStudent = studentsWithGPA.find((s) => s.id === studentId);
+
+  // Mutation
+  const submitAssignmentMutation = useMutation({
+    mutationFn: async (data: any) => {
+      console.log("📤 Sending payload to API:", data); // Debug
+      const res = await apiRequest("POST", "/api/assignment-submissions", data);
+      console.log("📥 API Response:", res); // Debug
+      return res;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/assignment-submissions"] });
+      toast({ title: "✅ Assignment submitted successfully" });
+      setShowSubmissionForm(false);
+      setSelectedAssignment(null);
+    },
+    onError: (error: any) => {
+      console.error("❌ Submission error:", error);
+      toast({
+        title: "Failed to submit assignment",
+        description: error?.message || "Unknown error",
+        variant: "destructive",
+      });
+    },
   });
 
-  app.delete("/api/students/:id", async (req, res) => {
-    try {
-      const success = await storage.deleteStudent(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Student not found" });
-      }
-      res.json({ message: "Student deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete student" });
+  const handleSubmitAssignment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAssignment) {
+      toast({ title: "No assignment selected", variant: "destructive" });
+      return;
     }
-  });
 
-  // Teacher routes
-  app.get("/api/teachers", async (req, res) => {
-    try {
-      const teachers = await storage.getAllTeachers();
-      res.json(teachers);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch teachers" });
+    const formData = new FormData(e.target as HTMLFormElement);
+    const submissionText = formData.get("submissionText")?.toString().trim();
+
+    if (!submissionText) {
+      toast({ title: "Please enter your submission text", variant: "destructive" });
+      return;
     }
-  });
 
-  app.get("/api/teachers/:id", async (req, res) => {
-    try {
-      const teacher = await storage.getTeacher(req.params.id);
-      if (!teacher) {
-        return res.status(404).json({ message: "Teacher not found" });
-      }
-      res.json(teacher);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch teacher" });
-    }
-  });
+    const payload = {
+      assignmentId: selectedAssignment.id,
+      studentId: studentId,
+      submissionText,
+    };
 
-  app.post("/api/teachers", async (req, res) => {
-    try {
-      const validatedData = insertTeacherSchema.parse(req.body);
-      const teacher = await storage.createTeacher(validatedData);
-      res.status(201).json(teacher);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create teacher" });
-    }
-  });
+    console.log("📝 Submitting assignment:", payload); // Debug
+    submitAssignmentMutation.mutate(payload);
+  };
 
-  app.put("/api/teachers/:id", async (req, res) => {
-    try {
-      const validatedData = insertTeacherSchema.partial().parse(req.body);
-      const teacher = await storage.updateTeacher(req.params.id, validatedData);
-      if (!teacher) {
-        return res.status(404).json({ message: "Teacher not found" });
-      }
-      res.json(teacher);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update teacher" });
-    }
-  });
+  const getAssignmentStatusBadge = (assignment: Assignment) => {
+    const submission = submissions.find((s) => s.assignmentId === assignment.id);
+    if (submission) return <Badge variant="success">Submitted</Badge>;
+    if (new Date(assignment.dueDate) < new Date()) return <Badge variant="destructive">Overdue</Badge>;
+    return <Badge variant="secondary">Pending</Badge>;
+  };
 
-  app.delete("/api/teachers/:id", async (req, res) => {
-    try {
-      const success = await storage.deleteTeacher(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Teacher not found" });
-      }
-      res.json({ message: "Teacher deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete teacher" });
-    }
-  });
+  const getProgressColor = (assignment: Assignment) => {
+    const now = new Date();
+    const due = new Date(assignment.dueDate);
+    const diff = due.getTime() - now.getTime();
+    const days = diff / (1000 * 60 * 60 * 24);
+    if (days < 0) return 0;
+    if (days < 2) return 20;
+    if (days < 5) return 50;
+    return 100;
+  };
 
-  // Course routes
-  app.get("/api/courses", async (req, res) => {
-    try {
-      const { grade, teacherId } = req.query;
-      let courses;
-      
-      if (grade) {
-        courses = await storage.getCoursesByGrade(parseInt(grade as string));
-      } else if (teacherId) {
-        courses = await storage.getCoursesByTeacher(teacherId as string);
-      } else {
-        courses = await storage.getAllCourses();
-      }
-      
-      res.json(courses);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch courses" });
-    }
-  });
+  return (
+    <div className="p-6 space-y-6">
+      {/* GPA Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle>GPA Overview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-2xl font-bold text-blue-600">
+            {currentStudent?.gpa != null ? currentStudent.gpa.toFixed(2) : "N/A"}
+          </p>
+        </CardContent>
+      </Card>
 
-  app.get("/api/courses/:id", async (req, res) => {
-    try {
-      const course = await storage.getCourse(req.params.id);
-      if (!course) {
-        return res.status(404).json({ message: "Course not found" });
-      }
-      res.json(course);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch course" });
-    }
-  });
+      {/* Assignments List */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Assignments</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {assignments.map((assignment) => (
+                <TableRow key={assignment.id}>
+                  <TableCell>{assignment.title}</TableCell>
+                  <TableCell>{getAssignmentStatusBadge(assignment)}</TableCell>
+                  <TableCell>{new Date(assignment.dueDate).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Progress value={getProgressColor(assignment)} />
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      onClick={() => {
+                        setSelectedAssignment(assignment);
+                        setShowSubmissionForm(true);
+                      }}
+                      disabled={!!submissions.find((s) => s.assignmentId === assignment.id)}
+                    >
+                      Submit
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-  app.post("/api/courses", async (req, res) => {
-    try {
-      const validatedData = insertCourseSchema.parse(req.body);
-      const course = await storage.createCourse(validatedData);
-      res.status(201).json(course);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create course" });
-    }
-  });
+      {/* Recent Submissions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent Submissions</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Assignment</TableHead>
+                <TableHead>Grade</TableHead>
+                <TableHead>Submitted On</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[...submissions]
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 10)
+                .map((submission) => (
+                  <TableRow key={submission.id}>
+                    <TableCell>
+                      {assignments.find((a) => a.id === submission.assignmentId)?.title || "Unknown"}
+                    </TableCell>
+                    <TableCell>{submission.grade ?? "Pending"}</TableCell>
+                    <TableCell>{new Date(submission.createdAt).toLocaleDateString()}</TableCell>
+                  </TableRow>
+                ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-  app.put("/api/courses/:id", async (req, res) => {
-    try {
-      const validatedData = insertCourseSchema.partial().parse(req.body);
-      const course = await storage.updateCourse(req.params.id, validatedData);
-      if (!course) {
-        return res.status(404).json({ message: "Course not found" });
-      }
-      res.json(course);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update course" });
-    }
-  });
-
-  app.delete("/api/courses/:id", async (req, res) => {
-    try {
-      const success = await storage.deleteCourse(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Course not found" });
-      }
-      res.json({ message: "Course deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete course" });
-    }
-  });
-
-  // Mark routes
-  app.get("/api/marks", async (req, res) => {
-    try {
-      const { studentId, courseId } = req.query;
-      let marks;
-      
-      if (studentId) {
-        marks = await storage.getMarksByStudent(studentId as string);
-      } else if (courseId) {
-        marks = await storage.getMarksByCourse(courseId as string);
-      } else {
-        marks = await storage.getAllMarks();
-      }
-      
-      res.json(marks);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch marks" });
-    }
-  });
-
-  app.post("/api/marks", async (req, res) => {
-    try {
-      const validatedData = insertMarkSchema.parse(req.body);
-      const mark = await storage.createMark(validatedData);
-      res.status(201).json(mark);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create mark" });
-    }
-  });
-
-  app.put("/api/marks/:id", async (req, res) => {
-    try {
-      const validatedData = insertMarkSchema.partial().parse(req.body);
-      const mark = await storage.updateMark(req.params.id, validatedData);
-      if (!mark) {
-        return res.status(404).json({ message: "Mark not found" });
-      }
-      res.json(mark);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update mark" });
-    }
-  });
-
-  app.delete("/api/marks/:id", async (req, res) => {
-    try {
-      const success = await storage.deleteMark(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Mark not found" });
-      }
-      res.json({ message: "Mark deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete mark" });
-    }
-  });
-
-  // Attendance routes
-  app.get("/api/attendance", async (req, res) => {
-    try {
-      const { studentId, courseId } = req.query;
-      let attendance;
-      
-      if (studentId) {
-        attendance = await storage.getAttendanceByStudent(studentId as string);
-      } else if (courseId) {
-        attendance = await storage.getAttendanceByCourse(courseId as string);
-      } else {
-        attendance = await storage.getAllAttendance();
-      }
-      
-      res.json(attendance);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch attendance" });
-    }
-  });
-
-  app.post("/api/attendance", async (req, res) => {
-    try {
-      const validatedData = insertAttendanceSchema.parse(req.body);
-      const attendance = await storage.createAttendance(validatedData);
-      res.status(201).json(attendance);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create attendance" });
-    }
-  });
-
-  app.put("/api/attendance/:id", async (req, res) => {
-    try {
-      const validatedData = insertAttendanceSchema.partial().parse(req.body);
-      const attendance = await storage.updateAttendance(req.params.id, validatedData);
-      if (!attendance) {
-        return res.status(404).json({ message: "Attendance not found" });
-      }
-      res.json(attendance);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update attendance" });
-    }
-  });
-
-  // Course Enrollment routes
-  app.get("/api/enrollments", async (req, res) => {
-    try {
-      const { studentId, courseId } = req.query;
-      let enrollments;
-      
-      if (studentId) {
-        enrollments = await storage.getEnrollmentsByStudent(studentId as string);
-      } else if (courseId) {
-        enrollments = await storage.getEnrollmentsByCourse(courseId as string);
-      } else {
-        enrollments = await storage.getAllCourseEnrollments();
-      }
-      
-      res.json(enrollments);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch enrollments" });
-    }
-  });
-
-  app.post("/api/enrollments", async (req, res) => {
-    try {
-      const validatedData = insertCourseEnrollmentSchema.parse(req.body);
-      const enrollment = await storage.createCourseEnrollment(validatedData);
-      res.status(201).json(enrollment);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create enrollment" });
-    }
-  });
-
-  // User routes
-  app.get("/api/users", async (req, res) => {
-    try {
-      const users = await storage.getAllUsers();
-      res.json(users.map(user => ({ ...user, password: undefined }))); // Don't send passwords
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch users" });
-    }
-  });
-
-  app.post("/api/users", async (req, res) => {
-    try {
-      const validatedData = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(validatedData);
-      res.status(201).json({ ...user, password: undefined }); // Don't send password
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create user" });
-    }
-  });
-
-  // Assignment routes
-  app.get("/api/assignments", async (req, res) => {
-    try {
-      const assignments = await storage.getAllAssignments();
-      res.json(assignments);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch assignments" });
-    }
-  });
-
-  app.get("/api/assignments/teacher/:teacherId", async (req, res) => {
-    try {
-      const assignments = await storage.getAssignmentsByTeacher(req.params.teacherId);
-      res.json(assignments);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch teacher assignments" });
-    }
-  });
-
-  app.get("/api/assignments/course/:courseId", async (req, res) => {
-    try {
-      const assignments = await storage.getAssignmentsByCourse(req.params.courseId);
-      res.json(assignments);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch course assignments" });
-    }
-  });
-
-  app.post("/api/assignments", async (req, res) => {
-    try {
-      const validatedData = insertAssignmentSchema.parse(req.body);
-      const assignment = await storage.createAssignment(validatedData);
-      res.status(201).json(assignment);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create assignment" });
-    }
-  });
-
-  app.put("/api/assignments/:id", async (req, res) => {
-    try {
-      const validatedData = insertAssignmentSchema.partial().parse(req.body);
-      const assignment = await storage.updateAssignment(req.params.id, validatedData);
-      if (!assignment) {
-        return res.status(404).json({ message: "Assignment not found" });
-      }
-      res.json(assignment);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update assignment" });
-    }
-  });
-
-  app.delete("/api/assignments/:id", async (req, res) => {
-    try {
-      const success = await storage.deleteAssignment(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Assignment not found" });
-      }
-      res.json({ message: "Assignment deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete assignment" });
-    }
-  });
-
-  // Assignment Submission routes
-  app.get("/api/assignment-submissions/student/:studentId", async (req, res) => {
-    try {
-      const submissions = await storage.getSubmissionsByStudent(req.params.studentId);
-      res.json(submissions);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch student submissions" });
-    }
-  });
-
-  app.get("/api/assignment-submissions/assignment/:assignmentId", async (req, res) => {
-    try {
-      const submissions = await storage.getSubmissionsByAssignment(req.params.assignmentId);
-      res.json(submissions);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch assignment submissions" });
-    }
-  });
-
-  app.post("/api/assignment-submissions", async (req, res) => {
-    try {
-      const validatedData = insertAssignmentSubmissionSchema.parse(req.body);
-      const submission = await storage.createAssignmentSubmission(validatedData);
-      res.status(201).json(submission);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create submission" });
-    }
-  });
-
-  app.put("/api/assignment-submissions/:id", async (req, res) => {
-    try {
-      const validatedData = insertAssignmentSubmissionSchema.partial().parse(req.body);
-      const submission = await storage.updateAssignmentSubmission(req.params.id, validatedData);
-      if (!submission) {
-        return res.status(404).json({ message: "Submission not found" });
-      }
-      res.json(submission);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to update submission" });
-    }
-  });
-
-  // Analytics routes
-  app.get("/api/analytics/students-gpa", async (req, res) => {
-    try {
-      const studentsWithGPA = await storage.getStudentsWithGPA();
-      res.json(studentsWithGPA);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch student GPA data" });
-    }
-  });
-
-  app.get("/api/analytics/subject-toppers", async (req, res) => {
-    try {
-      const subjectToppers = await storage.getSubjectToppers();
-      res.json(subjectToppers);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch subject toppers" });
-    }
-  });
-
-  app.get("/api/analytics/attendance-stats", async (req, res) => {
-    try {
-      const attendanceStats = await storage.getAttendanceStats();
-      res.json(attendanceStats);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch attendance stats" });
-    }
-  });
-
-  app.get("/api/analytics/dashboard-stats", async (req, res) => {
-    try {
-      const [students, teachers, courses, attendanceStats] = await Promise.all([
-        storage.getAllStudents(),
-        storage.getAllTeachers(),
-        storage.getAllCourses(),
-        storage.getAttendanceStats()
-      ]);
-
-      const stats = {
-        totalStudents: students.length,
-        activeTeachers: teachers.filter(t => t.status === 'active').length,
-        totalCourses: courses.filter(c => c.status === 'active').length,
-        avgAttendance: attendanceStats.percentage
-      };
-
-      res.json(stats);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch dashboard stats" });
-    }
-  });
-
-  // Notification routes
-  app.get("/api/notifications/:userId", async (req, res) => {
-    try {
-      const notifications = await storage.getNotificationsByUser(req.params.userId);
-      res.json(notifications);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch notifications" });
-    }
-  });
-
-  app.post("/api/notifications", async (req, res) => {
-    try {
-      const validatedData = insertNotificationSchema.parse(req.body);
-      const notification = await storage.createNotification(validatedData);
-      res.status(201).json(notification);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ message: "Validation error", errors: error.errors });
-      }
-      res.status(500).json({ message: "Failed to create notification" });
-    }
-  });
-
-  app.patch("/api/notifications/:id/read", async (req, res) => {
-    try {
-      const notification = await storage.markNotificationAsRead(req.params.id);
-      if (!notification) {
-        return res.status(404).json({ message: "Notification not found" });
-      }
-      res.json(notification);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to update notification" });
-    }
-  });
-
-  app.delete("/api/notifications/:id", async (req, res) => {
-    try {
-      const success = await storage.deleteNotification(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Notification not found" });
-      }
-      res.json({ message: "Notification deleted successfully" });
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete notification" });
-    }
-  });
-
-  // Authentication routes (mock for now)
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { username, password, role } = req.body;
-      
-      // Mock authentication - in production, you'd validate against database
-      const mockUsers = {
-        admin: { username: "admin", password: "admin123", id: "admin-001", role: "admin" },
-        teacher: { username: "teacher", password: "teacher123", id: "teacher-001", role: "teacher" },
-        student: { username: "student", password: "student123", id: "student-001", role: "student" }
-      };
-
-      const user = mockUsers[role as keyof typeof mockUsers];
-      if (user && username === user.username && password === user.password) {
-        res.json({
-          id: user.id,
-          role: user.role,
-          username: user.username,
-          success: true
-        });
-      } else {
-        res.status(401).json({ message: "Invalid credentials" });
-      }
-    } catch (error) {
-      res.status(500).json({ message: "Login failed" });
-    }
-  });
-
-  app.post("/api/auth/signup", async (req, res) => {
-    try {
-      const { email, password, role } = req.body;
-      
-      // Mock signup - in production, you'd save to database
-      // For now, we'll just simulate user creation
-      const newUser = {
-        id: `${role}-${Date.now()}`,
-        email,
-        role,
-        username: email.split('@')[0],
-        success: true
-      };
-
-      res.status(201).json(newUser);
-    } catch (error) {
-      res.status(500).json({ message: "Signup failed" });
-    }
-  });
-
-  const httpServer = createServer(app);
-  return httpServer;
+      {/* Submission Form Dialog */}
+      <Dialog open={showSubmissionForm} onOpenChange={setShowSubmissionForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Submit Assignment</DialogTitle>
+          </DialogHeader>
+          {selectedAssignment && (
+            <form onSubmit={handleSubmitAssignment} className="space-y-4">
+              <p className="font-semibold">{selectedAssignment.title}</p>
+              <Textarea name="submissionText" placeholder="Enter your submission..." />
+              <Button type="submit" disabled={submitAssignmentMutation.isPending}>
+                {submitAssignmentMutation.isPending ? "Submitting..." : "Submit"}
+              </Button>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }
