@@ -65,9 +65,10 @@ const rolePanels = [
 interface SidebarProps {
   userRole: UserRole;
   userId: string;
+  variant?: 'default' | 'mobile';
 }
 
-export function Sidebar({ userRole, userId }: SidebarProps) {
+export function Sidebar({ userRole, userId, variant = 'default' }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { logout } = useAuth();
@@ -78,8 +79,9 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
 
   return (
     <aside className={cn(
-      "bg-white shadow-lg border-r border-gray-200 flex flex-col transition-all duration-300 h-screen overflow-hidden",
-      isCollapsed ? "w-16" : "w-64"
+      "bg-white shadow-lg border-r border-gray-200 flex flex-col transition-all duration-300 overflow-hidden",
+      variant === 'mobile' ? "w-full max-h-[80vh]" : "h-screen",
+      variant === 'mobile' ? "" : (isCollapsed ? "w-16" : "w-64")
     )}>
       {/* Logo Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
@@ -89,18 +91,20 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
             <h1 className="text-xl font-bold text-gray-800 ml-3">Pathshala Saathi</h1>
           )}
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggleSidebar}
-          className="p-1 h-8 w-8"
-        >
-          {isCollapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronLeft className="h-4 w-4" />
-          )}
-        </Button>
+        {variant === 'default' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleSidebar}
+            className="p-1 h-8 w-8"
+          >
+            {isCollapsed ? (
+              <ChevronRight className="h-4 w-4" />
+            ) : (
+              <ChevronLeft className="h-4 w-4" />
+            )}
+          </Button>
+        )}
       </div>
       
       {/* Navigation Menu */}
@@ -125,11 +129,11 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
                     className={cn(
                       "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
                       isActive && "bg-primary text-white hover:bg-blue-600 hover:text-white",
-                      isCollapsed ? "justify-center" : "space-x-3"
+                      isCollapsed && variant !== 'mobile' ? "justify-center" : "space-x-3"
                     )}
                   >
                     <Icon className="w-5 h-5 text-current flex-shrink-0" />
-                    {!isCollapsed && <span>{item.name}</span>}
+                    {(!isCollapsed || variant === 'mobile') && <span>{item.name}</span>}
                   </div>
                 </Link>
               );
@@ -190,11 +194,11 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
                 className={cn(
                   "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
                   location === "/student-panel" && "bg-primary text-white hover:bg-blue-600 hover:text-white",
-                  isCollapsed ? "justify-center" : "space-x-3"
+                  isCollapsed && variant !== 'mobile' ? "justify-center" : "space-x-3"
                 )}
               >
                 <GraduationCapIcon className="w-5 h-5 text-current flex-shrink-0" />
-                {!isCollapsed && <span>Student Panel</span>}
+                {(!isCollapsed || variant === 'mobile') && <span>Student Panel</span>}
               </div>
             </Link>
           </div>
@@ -220,11 +224,11 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
                     className={cn(
                       "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
                       isActive && "bg-green-600 text-white hover:bg-green-700 hover:text-white",
-                      isCollapsed ? "justify-center" : "space-x-3"
+                      isCollapsed && variant !== 'mobile' ? "justify-center" : "space-x-3"
                     )}
                   >
                     <Icon className="w-5 h-5 text-current flex-shrink-0" />
-                    {!isCollapsed && (
+                    {(!isCollapsed || variant === 'mobile') && (
                       <div className="flex flex-col">
                         <span className="text-sm font-medium">{panel.name}</span>
                         <span className="text-xs opacity-75">{panel.description}</span>
@@ -242,19 +246,19 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
       <div className="px-2 py-4 border-t border-gray-200">
         <div className={cn(
           "flex items-center",
-          isCollapsed ? "justify-center" : "space-x-3 px-2"
+          isCollapsed && variant !== 'mobile' ? "justify-center" : "space-x-3 px-2"
         )}>
           <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
             <Users className="w-6 h-6 text-gray-600" />
           </div>
-          {!isCollapsed && (
+          {(!isCollapsed || variant === 'mobile') && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-gray-900 capitalize">{userRole} User</p>
               <p className="text-xs text-gray-500 capitalize">{userRole}</p>
             </div>
           )}
         </div>
-        {!isCollapsed && (
+        {(!isCollapsed || variant === 'mobile') && (
           <Button
             variant="ghost"
             size="sm"

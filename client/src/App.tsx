@@ -18,6 +18,9 @@ import Analytics from "@/pages/analytics";
 import TeacherPanel from "@/pages/teacher-panel";
 import StudentPanel from "@/pages/student-panel";
 import NotFound from "@/pages/not-found";
+import { Drawer, DrawerContent, DrawerTrigger, DrawerClose } from "@/components/ui/drawer";
+import { Button } from "@/components/ui/button";
+import { Menu } from "lucide-react";
 
 interface RouterProps {
   userRole: UserRole;
@@ -59,9 +62,35 @@ function Router({ userRole, userId }: RouterProps) {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar userRole={userRole} userId={userId} />
+    <div className="flex md:h-screen min-h-screen overflow-hidden">
+      <div className="hidden md:block">
+        <Sidebar userRole={userRole} userId={userId} />
+      </div>
       <main className="flex-1 overflow-auto">
+        {/* Mobile Top Bar with Drawer menu */}
+        <div className="md:hidden sticky top-0 z-40 bg-white border-b">
+          <div className="flex items-center justify-between px-4 py-3">
+            <Drawer>
+              <DrawerTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Open menu">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent className="h-[85vh] p-0">
+                <div className="h-full overflow-auto">
+                  <Sidebar userRole={userRole} userId={userId} variant="mobile" />
+                  <div className="p-4">
+                    <DrawerClose asChild>
+                      <Button className="w-full">Close</Button>
+                    </DrawerClose>
+                  </div>
+                </div>
+              </DrawerContent>
+            </Drawer>
+            <span className="font-semibold">Pathshala Saathi</span>
+            <span className="w-9" />
+          </div>
+        </div>
         <Switch>
           {/* Admin Routes */}
           {userRole === 'admin' && (
