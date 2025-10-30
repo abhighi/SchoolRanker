@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertStudentSchema, type InsertStudent, type Student } from "@shared/schema";
@@ -56,6 +56,28 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
       profileImage: "",
     },
   });
+
+  // When editing, ensure form reflects latest 'student' values when dialog opens
+  useEffect(() => {
+    if (isEditing && student) {
+      form.reset({
+        studentId: student.studentId,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        email: student.email,
+        grade: student.grade,
+        section: student.section,
+        dateOfBirth: student.dateOfBirth || "",
+        address: student.address || "",
+        phoneNumber: student.phoneNumber || "",
+        guardianName: student.guardianName || "",
+        guardianPhone: student.guardianPhone || "",
+        status: student.status as "active" | "inactive" | "graduated",
+        enrollmentDate: student.enrollmentDate,
+        profileImage: student.profileImage || "",
+      });
+    }
+  }, [isEditing, student, form]);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertStudent) => apiRequest("POST", "/api/students", data),
@@ -156,7 +178,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="grade">Grade</Label>
-              <Select onValueChange={(value) => form.setValue("grade", parseInt(value))}>
+              <Select onValueChange={(value) => form.setValue("grade", parseInt(value))} defaultValue={String(form.getValues("grade"))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select grade" />
                 </SelectTrigger>
@@ -175,7 +197,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
             
             <div>
               <Label htmlFor="section">Section</Label>
-              <Select onValueChange={(value) => form.setValue("section", value)}>
+              <Select onValueChange={(value) => form.setValue("section", value)} defaultValue={form.getValues("section") || undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select section" />
                 </SelectTrigger>
@@ -194,7 +216,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
             
             <div>
               <Label htmlFor="status">Status</Label>
-              <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive" | "graduated")}>
+              <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive" | "graduated")} defaultValue={form.getValues("status") || undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>

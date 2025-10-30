@@ -1,6 +1,7 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertMarkSchema, type InsertMark, type Mark } from "@shared/schema";
+import { insertMarkSchema, type InsertMark, type Mark, type Student, type Course } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,12 +23,8 @@ export function MarksForm({ open, onOpenChange, mark }: MarksFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!mark;
 
-  const { data: students = [] } = useQuery({
+  const { data: students = [] } = useQuery<Student[]>({
     queryKey: ["/api/students"],
-  });
-
-  const { data: courses = [] } = useQuery({
-    queryKey: ["/api/courses"],
   });
 
   const form = useForm<InsertMark>({
@@ -49,6 +46,25 @@ export function MarksForm({ open, onOpenChange, mark }: MarksFormProps) {
       examDate: new Date().toISOString().split('T')[0],
       remarks: "",
     },
+  });
+
+  // When editing, ensure form reflects latest 'mark' values when dialog opens
+  useEffect(() => {
+    if (isEditing && mark) {
+      form.reset({
+        studentId: mark.studentId,
+        courseId: mark.courseId,
+        examType: mark.examType as "midterm" | "final" | "quiz" | "assignment" | "project",
+        marks: mark.marks,
+        totalMarks: mark.totalMarks,
+        examDate: mark.examDate,
+        remarks: mark.remarks || "",
+      });
+    }
+  }, [isEditing, mark]);
+
+  const { data: courses = [] } = useQuery<Course[]>({
+    queryKey: ["/api/courses"],
   });
 
   const createMutation = useMutation({
@@ -98,7 +114,7 @@ export function MarksForm({ open, onOpenChange, mark }: MarksFormProps) {
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div>
             <Label htmlFor="studentId">Student</Label>
-            <Select onValueChange={(value) => form.setValue("studentId", value)}>
+            <Select onValueChange={(value) => form.setValue("studentId", value)} defaultValue={form.getValues("studentId") || undefined}>
               <SelectTrigger>
                 <SelectValue placeholder="Select student" />
               </SelectTrigger>
@@ -117,7 +133,7 @@ export function MarksForm({ open, onOpenChange, mark }: MarksFormProps) {
 
           <div>
             <Label htmlFor="courseId">Course</Label>
-            <Select onValueChange={(value) => form.setValue("courseId", value)}>
+            <Select onValueChange={(value) => form.setValue("courseId", value)} defaultValue={form.getValues("courseId") || undefined}>
               <SelectTrigger>
                 <SelectValue placeholder="Select course" />
               </SelectTrigger>
@@ -136,7 +152,7 @@ export function MarksForm({ open, onOpenChange, mark }: MarksFormProps) {
 
           <div>
             <Label htmlFor="examType">Exam Type</Label>
-            <Select onValueChange={(value) => form.setValue("examType", value as any)}>
+            <Select onValueChange={(value) => form.setValue("examType", value as any)} defaultValue={form.getValues("examType") || undefined}>
               <SelectTrigger>
                 <SelectValue placeholder="Select exam type" />
               </SelectTrigger>

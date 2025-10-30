@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTeacherSchema, type InsertTeacher, type Teacher } from "@shared/schema";
@@ -53,6 +54,27 @@ export function TeacherForm({ open, onOpenChange, teacher }: TeacherFormProps) {
       profileImage: "",
     },
   });
+
+  // When editing, ensure form reflects latest 'teacher' values when dialog opens
+  useEffect(() => {
+    if (isEditing && teacher) {
+      form.reset({
+        teacherId: teacher.teacherId,
+        firstName: teacher.firstName,
+        lastName: teacher.lastName,
+        email: teacher.email,
+        phoneNumber: teacher.phoneNumber || "",
+        address: teacher.address || "",
+        subject: teacher.subject,
+        qualification: teacher.qualification || "",
+        experience: teacher.experience || 0,
+        salary: teacher.salary || "",
+        joinDate: teacher.joinDate,
+        status: teacher.status as "active" | "inactive",
+        profileImage: teacher.profileImage || "",
+      });
+    }
+  }, [isEditing, teacher, form]);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertTeacher) => apiRequest("POST", "/api/teachers", data),
@@ -158,7 +180,7 @@ export function TeacherForm({ open, onOpenChange, teacher }: TeacherFormProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="subject">Subject</Label>
-              <Select onValueChange={(value) => form.setValue("subject", value)}>
+              <Select onValueChange={(value) => form.setValue("subject", value)} defaultValue={form.getValues("subject") || undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
@@ -207,7 +229,7 @@ export function TeacherForm({ open, onOpenChange, teacher }: TeacherFormProps) {
             
             <div>
               <Label htmlFor="status">Status</Label>
-              <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive")}>
+              <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive")} defaultValue={form.getValues("status") || undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>

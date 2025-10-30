@@ -1,6 +1,7 @@
-import { useForm } from "react-hook-form";
+import { useEffect } from "react";
+import { useForm, type SubmitHandler } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertCourseSchema, type InsertCourse, type Course } from "@shared/schema";
+import { insertCourseSchema, type InsertCourse, type Course, type Teacher } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,7 +23,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!course;
 
-  const { data: teachers = [] } = useQuery({
+  const { data: teachers = [] } = useQuery<Teacher[]>({
     queryKey: ["/api/teachers"],
   });
 
@@ -36,7 +37,6 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
       subject: course.subject,
       teacherId: course.teacherId || "",
       credits: course.credits,
-      schedule: course.schedule,
       status: course.status as "active" | "inactive",
     } : {
       courseCode: "",
@@ -50,6 +50,23 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
       status: "active",
     },
   });
+
+  // When editing, ensure form reflects latest 'course' values when dialog opens
+  useEffect(() => {
+    if (isEditing && course) {
+      form.reset({
+        courseCode: course.courseCode,
+        name: course.name,
+        description: course.description || "",
+        grade: course.grade,
+        subject: course.subject,
+        teacherId: course.teacherId || "",
+        credits: course.credits,
+        // omit schedule here to avoid type mismatches; keep current form value
+        status: course.status as "active" | "inactive",
+      });
+    }
+  }, [isEditing, course, form]);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertCourse) => apiRequest("POST", "/api/courses", data),
@@ -78,7 +95,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
     },
   });
 
-  const onSubmit = (data: InsertCourse) => {
+  const onSubmit: SubmitHandler<InsertCourse> = (data) => {
     if (isEditing) {
       updateMutation.mutate(data);
     } else {
@@ -138,7 +155,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="grade">Grade</Label>
-              <Select onValueChange={(value) => form.setValue("grade", parseInt(value))}>
+              <Select onValueChange={(value) => form.setValue("grade", parseInt(value))} defaultValue={String(form.getValues("grade"))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select grade" />
                 </SelectTrigger>
@@ -157,7 +174,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
             
             <div>
               <Label htmlFor="subject">Subject</Label>
-              <Select onValueChange={(value) => form.setValue("subject", value)}>
+              <Select onValueChange={(value) => form.setValue("subject", value)} defaultValue={form.getValues("subject") || undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
@@ -193,7 +210,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="teacherId">Assigned Teacher</Label>
-              <Select onValueChange={(value) => form.setValue("teacherId", value)}>
+              <Select onValueChange={(value) => form.setValue("teacherId", value)} defaultValue={form.getValues("teacherId") || undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select teacher" />
                 </SelectTrigger>
@@ -209,7 +226,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
             
             <div>
               <Label htmlFor="status">Status</Label>
-              <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive")}>
+              <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive")} defaultValue={form.getValues("status") || undefined}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>

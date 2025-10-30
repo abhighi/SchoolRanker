@@ -29,6 +29,15 @@ export const db = drizzle(pool, {
   schema: schema // Ensure your schema is correctly imported and passed here
 });
 
+// Ensure required postgres extensions exist (for gen_random_uuid())
+(async () => {
+  try {
+    await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto;');
+  } catch (err) {
+    console.error('Failed to ensure pgcrypto extension:', err);
+  }
+})();
+
 // Optional: Add a listener for pool errors (good practice)
 pool.on('error', (err, client) => {
     console.error('Unexpected error on idle client in pg pool', err);

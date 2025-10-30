@@ -17,7 +17,7 @@ import {
   Plus, Eye, CheckCircle, Clock, AlertCircle, 
   UserPlus, GraduationCap, FileText, Award
 } from "lucide-react";
-import type { Assignment, Student, Course, Attendance } from "@shared/schema";
+import type { Assignment, Student, Course, Attendance, Teacher } from "@shared/schema";
 
 export default function TeacherPanel() {
   const [selectedCourse, setSelectedCourse] = useState<string>("");
@@ -28,8 +28,9 @@ export default function TeacherPanel() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // Sample teacher ID - in a real app, this would come from authentication
-  const teacherId = "teacher-001";
+  // Sample teacher code - in a real app, this would come from authentication
+  // Note: This corresponds to teachers.teacherId (human-readable), not the DB primary key
+  const teacherCode = "teacher-001";
 
   const { data: assignments = [] } = useQuery<Assignment[]>({
     queryKey: ["/api/assignments"],
@@ -43,12 +44,25 @@ export default function TeacherPanel() {
     queryKey: ["/api/students"],
   });
 
+  const { data: teachers = [] } = useQuery<Teacher[]>({
+    queryKey: ["/api/teachers"],
+  });
+
   const { data: attendance = [] } = useQuery<Attendance[]>({
     queryKey: ["/api/attendance"],
   });
 
-  const teacherCourses = courses.filter((course) => course.teacherId === teacherId);
-  const teacherAssignments = assignments.filter((assignment) => assignment.teacherId === teacherId);
+  // Find the actual DB teacher id from the human-readable teacher code
+  const currentTeacher = teachers.find(t => t.teacherId === teacherCode);
+  const currentTeacherId = currentTeacher?.id;
+
+  const teacherCourses = currentTeacherId
+    ? courses.filter((course) => course.teacherId === currentTeacherId)
+    : courses; // fallback: show all courses if mapping not found
+
+  const teacherAssignments = currentTeacherId
+    ? assignments.filter((assignment) => assignment.teacherId === currentTeacherId)
+    : assignments;
   const recentAttendance = attendance.slice(-10); // Show last 10 attendance records
 
   const createAssignmentMutation = useMutation({
@@ -88,7 +102,7 @@ export default function TeacherPanel() {
   });
 
   const updateAssignmentStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => 
+    mutationFn: ({ id, status }: { id: string; status: string }) => 
       apiRequest("PATCH", `/api/assignments/${id}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
@@ -103,11 +117,16 @@ export default function TeacherPanel() {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
     
+    if (!currentTeacherId) {
+      toast({ title: "No teacher found for code 'teacher-001'", description: "Create a teacher first or adjust your login.", variant: "destructive" });
+      return;
+    }
+    
     const assignmentData = {
       title: formData.get("title"),
       description: formData.get("description"),
       courseId: formData.get("courseId"),
-      teacherId: teacherId,
+      teacherId: currentTeacherId,
       dueDate: formData.get("dueDate"),
       totalPoints: parseInt(formData.get("totalPoints") as string) || 100,
       type: formData.get("type"),

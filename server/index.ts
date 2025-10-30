@@ -40,15 +40,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// --- IMPORTANT DEBUGGING LOGS (keep these, they're useful) ---
-console.log('--- Environment Variables Loaded ---');
-console.log('DATABASE_URL:', process.env.DATABASE_URL); // Log your DB URL
-console.log('DB_USER:', process.env.DB_USER); // Log individual components if you use them
-console.log('DB_HOST:', process.env.DB_HOST);
-console.log('DB_PORT:', process.env.DB_PORT);
-console.log('DB_NAME:', process.env.DB_NAME);
-console.log('DB_PASSWORD length:', process.env.DB_PASSWORD ? process.env.DB_PASSWORD.length : 'undefined'); // Don't log password directly!
-console.log('---------------------------------');
+// Avoid logging sensitive environment variables in production
 
 
 // --- ADD THIS ASYNC FUNCTION TO TEST DB CONNECTION ---
