@@ -20,9 +20,9 @@ Before setting up the project locally, ensure you have the following software in
      - Install Docker: https://www.docker.com/get-started
      - Run PostgreSQL in container: 
        ```bash
-       docker run --name pathshala-db -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=pathshala -p 5432:5432 -d postgres:15
+       docker run --name pathshala-db -e POSTGRES_PASSWORD=root -e POSTGRES_DB=pathshala -p 5432:5432 -d postgres:15
        ```
-
+ 
 3. **Git**
    - Download from: https://git-scm.com/
    - Verify installation: `git --version`
@@ -53,7 +53,7 @@ npm install
 ```bash
 # Start PostgreSQL container
 docker run --name pathshala-db \
-  -e POSTGRES_PASSWORD=yourpassword \
+  -e POSTGRES_PASSWORD=root \
   -e POSTGRES_DB=pathshala \
   -e POSTGRES_USER=postgres \
   -p 5432:5432 \
@@ -100,7 +100,7 @@ NODE_ENV=development
 PORT=5000
 
 # Session Configuration (generate a random string)
-SESSION_SECRET=your-super-secret-session-key-here
+SESSION_SECRET=avi11
 ```
 
 ### 5. Database Migration

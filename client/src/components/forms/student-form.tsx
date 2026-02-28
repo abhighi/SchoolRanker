@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertStudentSchema, type InsertStudent, type Student } from "@shared/schema";
@@ -22,24 +22,26 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!student;
 
-  const form = useForm<InsertStudent>({
-    resolver: zodResolver(insertStudentSchema),
-    defaultValues: student ? {
-      studentId: student.studentId,
-      firstName: student.firstName,
-      lastName: student.lastName,
-      email: student.email,
-      grade: student.grade,
-      section: student.section,
-      dateOfBirth: student.dateOfBirth || "",
-      address: student.address || "",
-      phoneNumber: student.phoneNumber || "",
-      guardianName: student.guardianName || "",
-      guardianPhone: student.guardianPhone || "",
-      status: student.status as "active" | "inactive" | "graduated",
-      enrollmentDate: student.enrollmentDate,
-      profileImage: student.profileImage || "",
-    } : {
+  const getDefaultValues = (): InsertStudent => {
+    if (student) {
+      return {
+        studentId: student.studentId,
+        firstName: student.firstName,
+        lastName: student.lastName,
+        email: student.email,
+        grade: student.grade,
+        section: student.section,
+        dateOfBirth: student.dateOfBirth || "",
+        address: student.address || "",
+        phoneNumber: student.phoneNumber || "",
+        guardianName: student.guardianName || "",
+        guardianPhone: student.guardianPhone || "",
+        status: student.status as "active" | "inactive" | "graduated",
+        enrollmentDate: student.enrollmentDate,
+        profileImage: student.profileImage || "",
+      };
+    }
+    return {
       studentId: "",
       firstName: "",
       lastName: "",
@@ -54,8 +56,20 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
       status: "active",
       enrollmentDate: new Date().toISOString().split('T')[0],
       profileImage: "",
-    },
+    };
+  };
+
+  const form = useForm<InsertStudent>({
+    resolver: zodResolver(insertStudentSchema),
+    defaultValues: getDefaultValues(),
   });
+
+  // Reset form when student prop changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset(getDefaultValues());
+    }
+  }, [open, student, form]);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertStudent) => apiRequest("POST", "/api/students", data),
@@ -64,10 +78,27 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/analytics"] });
       toast({ title: "Student created successfully" });
       onOpenChange(false);
-      form.reset();
+      form.reset(getDefaultValues());
     },
-    onError: () => {
-      toast({ title: "Failed to create student", variant: "destructive" });
+    onError: (error: any) => {
+      // Try to parse error response
+      let errorMessage = "Failed to create student";
+      try {
+        if (error?.message) {
+          const parsed = JSON.parse(error.message);
+          if (parsed.message && !parsed.errors) {
+            errorMessage = parsed.message;
+          }
+          if (parsed.errors && parsed.errors.length > 0) {
+            // Map errors to form fields
+            parsed.errors.forEach((err: { field: string; message: string }) => {
+              form.setError(err.field as any, { message: err.message });
+            });
+            return;
+          }
+        }
+      } catch { }
+      toast({ title: errorMessage, variant: "destructive" });
     },
   });
 
@@ -98,7 +129,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Student" : "Add New Student"}</DialogTitle>
         </DialogHeader>
-        
+
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -112,7 +143,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
                 <p className="text-sm text-red-500">{form.formState.errors.studentId.message}</p>
               )}
             </div>
-            
+
             <div>
               <Label htmlFor="email">Email</Label>
               <Input
@@ -139,7 +170,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
                 <p className="text-sm text-red-500">{form.formState.errors.firstName.message}</p>
               )}
             </div>
-            
+
             <div>
               <Label htmlFor="lastName">Last Name</Label>
               <Input
@@ -172,7 +203,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
                 <p className="text-sm text-red-500">{form.formState.errors.grade.message}</p>
               )}
             </div>
-            
+
             <div>
               <Label htmlFor="section">Section</Label>
               <Select onValueChange={(value) => form.setValue("section", value)}>
@@ -191,7 +222,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
                 <p className="text-sm text-red-500">{form.formState.errors.section.message}</p>
               )}
             </div>
-            
+
             <div>
               <Label htmlFor="status">Status</Label>
               <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive" | "graduated")}>
@@ -219,7 +250,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
                 {...form.register("dateOfBirth")}
               />
             </div>
-            
+
             <div>
               <Label htmlFor="enrollmentDate">Enrollment Date</Label>
               <Input
@@ -248,7 +279,7 @@ export function StudentForm({ open, onOpenChange, student }: StudentFormProps) {
                 placeholder="+1234567890"
               />
             </div>
-            
+
             <div>
               <Label htmlFor="guardianPhone">Guardian Phone</Label>
               <Input

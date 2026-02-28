@@ -35,10 +35,34 @@ export function SignupForm({ onSignup, onBackToLogin }: SignupFormProps) {
         description: "Welcome to Pathshala Saathi!" 
       });
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
+      let errorMessage = "Registration failed. Please try again.";
+      
+      // Try to extract meaningful error message
+      try {
+        if (error?.message) {
+          const parsed = JSON.parse(error.message);
+          if (parsed.message) {
+            // Handle specific error cases
+            if (parsed.message.includes("Username already taken")) {
+              errorMessage = "Username is already taken";
+            } else if (parsed.message.includes("Email already registered")) {
+              errorMessage = "Email is already registered";
+            } else if (parsed.errors && parsed.errors.length > 0) {
+              // Show first validation error
+              errorMessage = parsed.errors[0].message;
+            } else {
+              errorMessage = parsed.message;
+            }
+          }
+        }
+      } catch {
+        // Keep default error message
+      }
+      
       toast({ 
         title: "Registration failed", 
-        description: error.message,
+        description: errorMessage,
         variant: "destructive" 
       });
     },

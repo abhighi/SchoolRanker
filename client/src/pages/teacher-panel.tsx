@@ -12,10 +12,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { 
-  BookOpen, Users, Calendar, ClipboardList, 
-  Plus, Eye, CheckCircle, Clock, AlertCircle, 
-  UserPlus, GraduationCap, FileText, Award
+import { useAuth } from "@/hooks/useAuth";
+import { useLocation } from "wouter";
+import {
+  BookOpen, Users, Calendar, ClipboardList,
+  Plus, Eye, CheckCircle, Clock, AlertCircle,
+  GraduationCap, FileText, Award
 } from "lucide-react";
 import type { Assignment, Student, Course, Attendance } from "@shared/schema";
 
@@ -23,13 +25,14 @@ export default function TeacherPanel() {
   const [selectedCourse, setSelectedCourse] = useState<string>("");
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
-  const [showStudentForm, setShowStudentForm] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
 
-  // Sample teacher ID - in a real app, this would come from authentication
-  const teacherId = "teacher-001";
+  // Get teacher ID from session - fallback to profileId or user.id
+  const teacherId = user?.profileId || user?.id || "";
 
   const { data: assignments = [] } = useQuery<Assignment[]>({
     queryKey: ["/api/assignments"],
@@ -75,20 +78,8 @@ export default function TeacherPanel() {
     },
   });
 
-  const addStudentMutation = useMutation({
-    mutationFn: (data: any) => apiRequest("POST", "/api/students", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/students"] });
-      toast({ title: "Student added successfully" });
-      setShowStudentForm(false);
-    },
-    onError: () => {
-      toast({ title: "Failed to add student", variant: "destructive" });
-    },
-  });
-
   const updateAssignmentStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: number; status: string }) => 
+    mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiRequest("PATCH", `/api/assignments/${id}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
@@ -102,7 +93,7 @@ export default function TeacherPanel() {
   const handleCreateAssignment = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    
+
     const assignmentData = {
       title: formData.get("title"),
       description: formData.get("description"),
@@ -121,7 +112,7 @@ export default function TeacherPanel() {
   const handleMarkAttendance = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
-    
+
     const attendanceData = {
       studentId: formData.get("studentId"),
       courseId: formData.get("courseId"),
@@ -131,27 +122,6 @@ export default function TeacherPanel() {
     };
 
     markAttendanceMutation.mutate(attendanceData);
-  };
-
-  const handleAddStudent = (e: React.FormEvent) => {
-    e.preventDefault();
-    const formData = new FormData(e.target as HTMLFormElement);
-    
-    const studentData = {
-      firstName: formData.get("firstName"),
-      lastName: formData.get("lastName"),
-      email: formData.get("email"),
-      phone: formData.get("phone"),
-      grade: parseInt(formData.get("grade") as string),
-      dateOfBirth: formData.get("dateOfBirth"),
-      address: formData.get("address"),
-      parentName: formData.get("parentName"),
-      parentPhone: formData.get("parentPhone"),
-      status: "active",
-      enrollmentDate: new Date().toISOString().split('T')[0],
-    };
-
-    addStudentMutation.mutate(studentData);
   };
 
   const getStatusBadge = (type: string) => {
@@ -200,7 +170,7 @@ export default function TeacherPanel() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Header title="Teacher Panel" subtitle="Manage your classes, assignments, and student progress" />
-      
+
       <main className="p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Quick Stats */}
@@ -402,80 +372,6 @@ export default function TeacherPanel() {
                     </form>
                   </DialogContent>
                 </Dialog>
-
-                <Dialog open={showStudentForm} onOpenChange={setShowStudentForm}>
-                  <DialogTrigger asChild>
-                    <Button className="h-16 bg-purple-600 hover:bg-purple-700">
-                      <div className="text-center">
-                        <UserPlus className="w-6 h-6 mx-auto mb-1" />
-                        <span>Add Student</span>
-                      </div>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Add New Student</DialogTitle>
-                    </DialogHeader>
-                    <form onSubmit={handleAddStudent} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="firstName">First Name</Label>
-                          <Input id="firstName" name="firstName" placeholder="John" required />
-                        </div>
-                        <div>
-                          <Label htmlFor="lastName">Last Name</Label>
-                          <Input id="lastName" name="lastName" placeholder="Doe" required />
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="email">Email</Label>
-                        <Input id="email" name="email" type="email" placeholder="john.doe@email.com" required />
-                      </div>
-                      <div>
-                        <Label htmlFor="phone">Phone</Label>
-                        <Input id="phone" name="phone" placeholder="+1 (555) 123-4567" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="grade">Grade</Label>
-                          <Select name="grade" required>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select grade" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {[9, 10, 11, 12].map((grade) => (
-                                <SelectItem key={grade} value={grade.toString()}>
-                                  Grade {grade}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                          <Input id="dateOfBirth" name="dateOfBirth" type="date" required />
-                        </div>
-                      </div>
-                      <div>
-                        <Label htmlFor="address">Address</Label>
-                        <Textarea id="address" name="address" placeholder="Student address" />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="parentName">Parent/Guardian Name</Label>
-                          <Input id="parentName" name="parentName" placeholder="Jane Doe" />
-                        </div>
-                        <div>
-                          <Label htmlFor="parentPhone">Parent Phone</Label>
-                          <Input id="parentPhone" name="parentPhone" placeholder="+1 (555) 987-6543" />
-                        </div>
-                      </div>
-                      <Button type="submit" className="w-full" disabled={addStudentMutation.isPending}>
-                        {addStudentMutation.isPending ? "Adding..." : "Add Student"}
-                      </Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
               </div>
             </CardContent>
           </Card>
@@ -522,12 +418,12 @@ export default function TeacherPanel() {
                               <Button variant="outline" size="sm">
                                 <Eye className="w-4 h-4" />
                               </Button>
-                              <Button 
-                                variant="outline" 
+                              <Button
+                                variant="outline"
                                 size="sm"
-                                onClick={() => updateAssignmentStatusMutation.mutate({ 
-                                  id: assignment.id, 
-                                  status: assignment.status === 'active' ? 'due' : 'active' 
+                                onClick={() => updateAssignmentStatusMutation.mutate({
+                                  id: assignment.id,
+                                  status: assignment.status === 'active' ? 'due' : 'active'
                                 })}
                               >
                                 Toggle Status

@@ -5,12 +5,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { GraduationCap, Lock, User } from "lucide-react";
-
-export type UserRole = 'admin' | 'teacher' | 'student';
+import type { UserRole } from "@/hooks/useAuth";
 
 interface LoginFormProps {
-  onLogin: (userId: string, role: UserRole) => void;
+  onLogin: (userId: string, role: UserRole, additionalData?: Record<string, any>) => void;
   onShowSignup: () => void;
 }
 
@@ -21,33 +21,52 @@ export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  // Mock authentication - in a real app, this would validate against the database
-  const mockUsers = {
-    admin: { username: "admin", password: "admin123", id: "admin-001" },
-    teacher: { username: "teacher", password: "teacher123", id: "teacher-001" },
-    student: { username: "student", password: "student123", id: "student-001" }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      const response = await apiRequest("POST", "/api/auth/login", { username, password });
+      const data = await response.json();
 
-    const user = mockUsers[role];
-    if (username === user.username && password === user.password) {
-      onLogin(user.id, role);
-      toast({ title: `Welcome ${role}!`, description: "Login successful" });
-    } else {
-      toast({ 
-        title: "Login failed", 
-        description: "Invalid username or password",
-        variant: "destructive" 
+      if (data.success) {
+        onLogin(data.id, data.role, {
+          username: data.username,
+          email: data.email,
+          profileId: data.profileId,
+        });
+        toast({ title: `Welcome ${data.username}!`, description: "Login successful" });
+      }
+    } catch (error: any) {
+      let errorMessage = "Login failed. Please try again.";
+      
+      // Try to extract meaningful error message
+      try {
+        if (error?.message) {
+          const parsed = JSON.parse(error.message);
+          if (parsed.message) {
+            // Handle specific error cases
+            if (parsed.message.includes("Invalid credentials")) {
+              errorMessage = "Invalid username or password";
+            } else if (parsed.message.includes("Authentication required")) {
+              errorMessage = "Session expired. Please login again.";
+            } else {
+              errorMessage = parsed.message;
+            }
+          }
+        }
+      } catch {
+        // Keep default error message
+      }
+      
+      toast({
+        title: "Login failed",
+        description: errorMessage,
+        variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
-    
-    setIsLoading(false);
   };
 
   const getRoleIcon = (userRole: UserRole) => {
@@ -56,11 +75,6 @@ export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
       case 'teacher': return <GraduationCap className="w-5 h-5" />;
       case 'student': return <User className="w-5 h-5" />;
     }
-  };
-
-  const getCredentialsHint = (userRole: UserRole) => {
-    const user = mockUsers[userRole];
-    return `${user.username} / ${user.password}`;
   };
 
   return (
@@ -73,7 +87,7 @@ export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">Pathshala Saathi</CardTitle>
-          <p className="text-gray-600 dark:text-gray-400">Select your role and sign in</p>
+          <p className="text-gray-600 dark:text-gray-400">Sign in to your account</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -137,7 +151,7 @@ export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
 
             <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg">
               <p className="text-sm text-blue-800 dark:text-blue-200">
-                <strong>Demo Credentials:</strong> {getCredentialsHint(role)}
+                <strong>Demo Credentials:</strong> admin/admin123, teacher/teacher123, student/student123
               </p>
             </div>
 

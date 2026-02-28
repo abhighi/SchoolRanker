@@ -1,12 +1,13 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth, type UserRole } from "@/hooks/useAuth";
-import { 
-  GraduationCap, Home, Users, Presentation, 
-  BookOpen, CalendarCheck, BarChart3, TrendingUp, 
-  ChevronLeft, ChevronRight, UserCheck, GraduationCapIcon, LogOut
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  GraduationCap, Home, Users, Presentation,
+  BookOpen, CalendarCheck, BarChart3, TrendingUp,
+  ChevronLeft, ChevronRight, UserCheck, GraduationCapIcon, LogOut, Calendar, Menu, X
 } from "lucide-react";
 
 const navigationItems = [
@@ -45,6 +46,11 @@ const navigationItems = [
     href: "/analytics",
     icon: BarChart3,
   },
+  {
+    name: "Calendar",
+    href: "/calendar",
+    icon: Calendar,
+  },
 ];
 
 const rolePanels = [
@@ -55,7 +61,7 @@ const rolePanels = [
     description: "For Teachers"
   },
   {
-    name: "Student Panel", 
+    name: "Student Panel",
     href: "/student-panel",
     icon: GraduationCapIcon,
     description: "For Students"
@@ -70,18 +76,67 @@ interface SidebarProps {
 export function Sidebar({ userRole, userId }: SidebarProps) {
   const [location] = useLocation();
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const { logout } = useAuth();
+  const isMobile = useIsMobile();
+
+  // Auto-collapse on mobile
+  useEffect(() => {
+    if (isMobile) {
+      setIsCollapsed(true);
+    }
+  }, [isMobile]);
 
   const toggleSidebar = () => {
-    setIsCollapsed(!isCollapsed);
+    if (isMobile) {
+      setIsMobileOpen(!isMobileOpen);
+    } else {
+      setIsCollapsed(!isCollapsed);
+    }
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileOpen(false);
   };
 
   return (
-    <aside className={cn(
-      "bg-white shadow-lg border-r border-gray-200 flex flex-col transition-all duration-300 h-screen overflow-hidden",
-      isCollapsed ? "w-16" : "w-64"
-    )}>
-      {/* Logo Header */}
+    <>
+      {/* Mobile menu button */}
+      {isMobile && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="fixed top-4 left-4 z-50 md:hidden"
+          onClick={() => setIsMobileOpen(true)}
+        >
+          <Menu className="w-6 h-6" />
+        </Button>
+      )}
+
+      {/* Mobile overlay */}
+      {isMobile && isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={closeMobileMenu}
+        />
+      )}
+
+      <aside className={cn(
+        "bg-white shadow-lg border-r border-gray-200 flex flex-col transition-all duration-300 h-screen overflow-hidden",
+        isCollapsed ? "w-16" : "w-64",
+        isMobile && "fixed z-50",
+        isMobile && !isMobileOpen && "-translate-x-full",
+        isMobile && isMobileOpen && "translate-x-0"
+      )}>
+        {/* Mobile close button */}
+        {isMobile && (
+          <div className="flex justify-end p-2 md:hidden">
+            <Button variant="ghost" size="sm" onClick={closeMobileMenu}>
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+        )}
+        {/* Logo Header */}
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
         <div className="flex items-center">
           <GraduationCap className="text-primary text-2xl" size={32} />
@@ -93,7 +148,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
           variant="ghost"
           size="sm"
           onClick={toggleSidebar}
-          className="p-1 h-8 w-8"
+          className={cn("p-1 h-8 w-8", isMobile && "hidden")}
         >
           {isCollapsed ? (
             <ChevronRight className="h-4 w-4" />
@@ -102,7 +157,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
           )}
         </Button>
       </div>
-      
+
       {/* Navigation Menu */}
       <nav className="flex-1 px-2 py-6 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100">
         {/* Navigation based on role */}
@@ -118,7 +173,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
             {navigationItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.href;
-              
+
               return (
                 <Link key={item.href} href={item.href}>
                   <div
@@ -156,7 +211,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
             ].map((item) => {
               const Icon = item.icon;
               const isActive = location === item.href;
-              
+
               return (
                 <Link key={item.href} href={item.href}>
                   <div
@@ -213,7 +268,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
             {rolePanels.map((panel) => {
               const Icon = panel.icon;
               const isActive = location === panel.href;
-              
+
               return (
                 <Link key={panel.href} href={panel.href}>
                   <div
@@ -237,7 +292,7 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
           </div>
         )}
       </nav>
-      
+
       {/* User Profile */}
       <div className="px-2 py-4 border-t border-gray-200">
         <div className={cn(
@@ -267,5 +322,6 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
         )}
       </div>
     </aside>
+    </>
   );
 }

@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Search, Eye, Edit, Trash2, Download, Printer, BookOpen, Users } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import type { Course, Teacher } from "@shared/schema";
 
 export default function Courses() {
@@ -23,6 +24,8 @@ export default function Courses() {
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
   const { data: courses = [], isLoading } = useQuery<Course[]>({
     queryKey: ["/api/courses"],
@@ -88,8 +91,8 @@ export default function Courses() {
       <Header 
         title="Course Management" 
         subtitle="Create and manage courses, curriculum, and schedules"
-        onAddClick={() => setShowCourseForm(true)}
-        addButtonText="Create Course"
+        onAddClick={isAdmin ? () => setShowCourseForm(true) : undefined}
+        addButtonText={isAdmin ? "Create Course" : undefined}
       />
 
       <div className="p-6 space-y-6">

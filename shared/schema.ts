@@ -1,9 +1,10 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, boolean, timestamp, jsonb, index, date } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Students table
+// ───────────────────── Tables ─────────────────────
+
 export const students = pgTable("students", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   studentId: varchar("student_id").notNull().unique(),
@@ -22,7 +23,6 @@ export const students = pgTable("students", {
   profileImage: text("profile_image"),
 });
 
-// Teachers table
 export const teachers = pgTable("teachers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   teacherId: varchar("teacher_id").notNull().unique(),
@@ -40,7 +40,6 @@ export const teachers = pgTable("teachers", {
   profileImage: text("profile_image"),
 });
 
-// Courses table
 export const courses = pgTable("courses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   courseCode: varchar("course_code").notNull().unique(),
@@ -50,54 +49,63 @@ export const courses = pgTable("courses", {
   subject: text("subject").notNull(),
   teacherId: varchar("teacher_id").references(() => teachers.id),
   credits: integer("credits").notNull().default(1),
-  schedule: jsonb("schedule"), // {day: string, startTime: string, endTime: string}[]
+  schedule: jsonb("schedule"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
-});
+}, (table) => [
+  index("courses_teacher_id_idx").on(table.teacherId),
+  index("courses_grade_idx").on(table.grade),
+]);
 
-// Marks table
 export const marks = pgTable("marks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   studentId: varchar("student_id").references(() => students.id).notNull(),
   courseId: varchar("course_id").references(() => courses.id).notNull(),
-  examType: varchar("exam_type", { length: 50 }).notNull(), // midterm, final, quiz, assignment
+  examType: varchar("exam_type", { length: 50 }).notNull(),
   marks: decimal("marks", { precision: 5, scale: 2 }).notNull(),
   totalMarks: decimal("total_marks", { precision: 5, scale: 2 }).notNull(),
   examDate: text("exam_date").notNull(),
   remarks: text("remarks"),
-});
+}, (table) => [
+  index("marks_student_id_idx").on(table.studentId),
+  index("marks_course_id_idx").on(table.courseId),
+]);
 
-// Attendance table
 export const attendance = pgTable("attendance", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   studentId: varchar("student_id").references(() => students.id).notNull(),
   courseId: varchar("course_id").references(() => courses.id).notNull(),
   date: text("date").notNull(),
-  status: varchar("status", { length: 20 }).notNull(), // present, absent, late
+  status: varchar("status", { length: 20 }).notNull(),
   remarks: text("remarks"),
-});
+}, (table) => [
+  index("attendance_student_id_idx").on(table.studentId),
+  index("attendance_course_id_idx").on(table.courseId),
+]);
 
-// Course Enrollments table
 export const courseEnrollments = pgTable("course_enrollments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   studentId: varchar("student_id").references(() => students.id).notNull(),
   courseId: varchar("course_id").references(() => courses.id).notNull(),
   enrollmentDate: text("enrollment_date").notNull(),
   status: varchar("status", { length: 20 }).notNull().default("active"),
-});
+}, (table) => [
+  index("enrollments_student_id_idx").on(table.studentId),
+  index("enrollments_course_id_idx").on(table.courseId),
+]);
 
-// Users table for authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: varchar("username").notNull().unique(),
   email: text("email").notNull().unique(),
   password: text("password").notNull(),
-  role: varchar("role", { length: 20 }).notNull(), // admin, teacher, student
-  profileId: varchar("profile_id"), // references to students.id or teachers.id
+  role: varchar("role", { length: 20 }).notNull(),
+  profileId: varchar("profile_id"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+}, (table) => [
+  index("users_role_idx").on(table.role),
+]);
 
-// Assignments table
 export const assignments = pgTable("assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
@@ -106,12 +114,14 @@ export const assignments = pgTable("assignments", {
   teacherId: varchar("teacher_id").references(() => teachers.id).notNull(),
   dueDate: text("due_date").notNull(),
   totalPoints: integer("total_points").notNull().default(100),
-  type: varchar("type", { length: 20 }).notNull().default("assignment"), // assignment, homework, project
+  type: varchar("type", { length: 20 }).notNull().default("assignment"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  index("assignments_course_id_idx").on(table.courseId),
+  index("assignments_teacher_id_idx").on(table.teacherId),
+]);
 
-// Assignment Submissions table
 export const assignmentSubmissions = pgTable("assignment_submissions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   assignmentId: varchar("assignment_id").references(() => assignments.id).notNull(),
@@ -119,14 +129,31 @@ export const assignmentSubmissions = pgTable("assignment_submissions", {
   submissionText: text("submission_text"),
   fileUrl: text("file_url"),
   submittedAt: text("submitted_at"),
-  status: varchar("status", { length: 20 }).notNull().default("pending"), // pending, submitted, graded, late
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
   grade: integer("grade"),
   feedback: text("feedback"),
   gradedAt: text("graded_at"),
   gradedBy: varchar("graded_by").references(() => teachers.id),
-});
+}, (table) => [
+  index("submissions_assignment_id_idx").on(table.assignmentId),
+  index("submissions_student_id_idx").on(table.studentId),
+]);
 
-// Insert schemas
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull(),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: varchar("type", { length: 20 }).notNull().default("info"),
+  read: boolean("read").notNull().default(false),
+  actionUrl: text("action_url"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("notifications_user_id_idx").on(table.userId),
+]);
+
+// ───────────────────── Insert Schemas ─────────────────────
+
 export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
 }).extend({
@@ -197,7 +224,16 @@ export const insertAssignmentSubmissionSchema = createInsertSchema(assignmentSub
   grade: z.number().min(0).optional(),
 });
 
-// Types
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  type: z.enum(["info", "success", "warning", "error"]).default("info"),
+  read: z.boolean().default(false),
+});
+
+// ───────────────────── Types ─────────────────────
+
 export type Student = typeof students.$inferSelect;
 export type InsertStudent = z.infer<typeof insertStudentSchema>;
 export type Teacher = typeof teachers.$inferSelect;
@@ -216,31 +252,38 @@ export type Assignment = typeof assignments.$inferSelect;
 export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;
 export type AssignmentSubmission = typeof assignmentSubmissions.$inferSelect;
 export type InsertAssignmentSubmission = z.infer<typeof insertAssignmentSubmissionSchema>;
-
-// Notifications table
-export const notifications = pgTable("notifications", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull(),
-  title: text("title").notNull(),
-  message: text("message").notNull(),
-  type: varchar("type", { length: 20 }).notNull().default("info"), // info, success, warning, error
-  read: boolean("read").notNull().default(false),
-  actionUrl: text("action_url"),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
-
-export const insertNotificationSchema = createInsertSchema(notifications).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  type: z.enum(["info", "success", "warning", "error"]).default("info"),
-  read: z.boolean().default(false),
-});
-
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
-// Additional types for rankings
+// Calendar Events
+export const calendarEvents = pgTable("calendar_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: varchar("title").notNull(),
+  description: text("description"),
+  eventDate: date("event_date").notNull(),
+  startTime: varchar("start_time"),
+  endTime: varchar("end_time"),
+  eventType: varchar("event_type").notNull().default("event"), // event, holiday, exam, meeting
+  grade: integer("grade"), // applicable for specific grade, null for all
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").default(sql`now()`),
+});
+
+export const insertCalendarEventSchema = createInsertSchema(calendarEvents).pick({
+  title: true,
+  description: true,
+  eventDate: true,
+  startTime: true,
+  endTime: true,
+  eventType: true,
+  grade: true,
+  createdBy: true,
+});
+
+export type CalendarEvent = typeof calendarEvents.$inferSelect;
+export type InsertCalendarEvent = z.infer<typeof insertCalendarEventSchema>;
+
+// Analytics types
 export type StudentWithGPA = Student & {
   gpa: number;
   totalMarks: number;

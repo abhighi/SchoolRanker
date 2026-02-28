@@ -8,14 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Search, Eye, Edit, Trash2, Download, Printer, Presentation } from "lucide-react";
+import { Search, Eye, Edit, Trash2, Download, Printer, Presentation, Mail, Phone, MapPin } from "lucide-react";
 import type { Teacher } from "@shared/schema";
 
 export default function Teachers() {
   const [showTeacherForm, setShowTeacherForm] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState<Teacher | undefined>();
+  const [viewingTeacher, setViewingTeacher] = useState<Teacher | undefined>();
   const [searchTerm, setSearchTerm] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -44,6 +46,10 @@ export default function Teachers() {
     setShowTeacherForm(true);
   };
 
+  const handleView = (teacher: Teacher) => {
+    setViewingTeacher(teacher);
+  };
+
   const handleDelete = (id: string) => {
     if (confirm("Are you sure you want to delete this teacher?")) {
       deleteMutation.mutate(id);
@@ -57,12 +63,12 @@ export default function Teachers() {
 
   // Filter teachers based on search and filters
   const filteredTeachers = teachers.filter(teacher => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       `${teacher.firstName} ${teacher.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
       teacher.teacherId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       teacher.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       teacher.subject.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesSubject = !subjectFilter || teacher.subject === subjectFilter;
     const matchesStatus = !statusFilter || teacher.status === statusFilter;
 
@@ -73,8 +79,8 @@ export default function Teachers() {
 
   return (
     <div>
-      <Header 
-        title="Teachers Management" 
+      <Header
+        title="Teachers Management"
         subtitle="Manage teacher profiles, assignments, and schedules"
         onAddClick={() => setShowTeacherForm(true)}
         addButtonText="Add New Teacher"
@@ -94,7 +100,7 @@ export default function Teachers() {
                   className="pl-10"
                 />
               </div>
-              
+
               <Select value={subjectFilter} onValueChange={setSubjectFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Subjects" />
@@ -108,7 +114,7 @@ export default function Teachers() {
                   ))}
                 </SelectContent>
               </Select>
-              
+
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Status" />
@@ -150,8 +156,8 @@ export default function Teachers() {
                 <Presentation className="mx-auto h-12 w-12 text-gray-300 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No teachers found</h3>
                 <p className="text-gray-500 mb-4">
-                  {teachers.length === 0 
-                    ? "Get started by adding your first teacher." 
+                  {teachers.length === 0
+                    ? "Get started by adding your first teacher."
                     : "Try adjusting your search or filter criteria."
                   }
                 </p>
@@ -210,22 +216,22 @@ export default function Teachers() {
                           {teacher.experience ? `${teacher.experience} years` : 'N/A'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge 
+                          <Badge
                             variant={teacher.status === 'active' ? 'default' : 'destructive'}
                           >
                             {teacher.status}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" onClick={() => handleView(teacher)}>
                             <Eye className="w-4 h-4" />
                           </Button>
                           <Button variant="ghost" size="sm" onClick={() => handleEdit(teacher)}>
                             <Edit className="w-4 h-4" />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => handleDelete(teacher.id)}
                             disabled={deleteMutation.isPending}
                           >
@@ -264,11 +270,68 @@ export default function Teachers() {
         </Card>
       </div>
 
-      <TeacherForm 
-        open={showTeacherForm} 
+      <TeacherForm
+        open={showTeacherForm}
         onOpenChange={handleFormClose}
         teacher={editingTeacher}
       />
+
+      {/* View Teacher Dialog */}
+      <Dialog open={!!viewingTeacher} onOpenChange={() => setViewingTeacher(undefined)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Teacher Details</DialogTitle>
+          </DialogHeader>
+          {viewingTeacher && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Teacher ID</p>
+                  <p className="mt-1">{viewingTeacher.teacherId}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Status</p>
+                  <p className="mt-1">{viewingTeacher.status}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">First Name</p>
+                  <p className="mt-1">{viewingTeacher.firstName}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Last Name</p>
+                  <p className="mt-1">{viewingTeacher.lastName}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm font-medium text-gray-500">Email</p>
+                  <p className="mt-1">{viewingTeacher.email}</p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-sm font-medium text-gray-500">Subject</p>
+                  <p className="mt-1">{viewingTeacher.subject}</p>
+                </div>
+                {viewingTeacher.qualification && (
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium text-gray-500">Qualification</p>
+                    <p className="mt-1">{viewingTeacher.qualification}</p>
+                  </div>
+                )}
+                {viewingTeacher.phoneNumber && (
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium text-gray-500">Phone</p>
+                    <p className="mt-1">{viewingTeacher.phoneNumber}</p>
+                  </div>
+                )}
+                {viewingTeacher.address && (
+                  <div className="col-span-2">
+                    <p className="text-sm font-medium text-gray-500">Address</p>
+                    <p className="mt-1">{viewingTeacher.address}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

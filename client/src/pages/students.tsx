@@ -70,14 +70,14 @@ export default function Students() {
   const exportToPDF = () => {
     try {
       const doc = new jsPDF();
-      
+
       doc.setFontSize(20);
       doc.text('Student Records Report', 20, 30);
-      
+
       doc.setFontSize(12);
       doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 20, 45);
       doc.text(`Total Students: ${filteredStudents.length}`, 20, 55);
-      
+
       const tableData = filteredStudents.map(student => [
         `${student.firstName} ${student.lastName}`,
         student.studentId,
@@ -86,14 +86,14 @@ export default function Students() {
         student.email,
         student.status
       ]);
-      
+
       (doc as any).autoTable({
         head: [['Name', 'Student ID', 'Grade', 'Section', 'Email', 'Status']],
         body: tableData,
         startY: 70,
         theme: 'grid'
       });
-      
+
       doc.save('student-records.pdf');
       toast({ title: "PDF exported successfully" });
     } catch (error) {
@@ -109,15 +109,13 @@ export default function Students() {
         Grade: student.grade,
         Section: student.section || '',
         Email: student.email,
-        Phone: student.phone || '',
-        'Date of Birth': student.dateOfBirth,
+        Phone: student.phoneNumber || '',
+        'Date of Birth': student.dateOfBirth || '',
         Address: student.address || '',
-        'Parent Name': student.parentName || '',
-        'Parent Phone': student.parentPhone || '',
-        'Enrollment Date': student.enrollmentDate,
+        'Enrollment Date': student.enrollmentDate || '',
         Status: student.status
       }));
-      
+
       const csv = Papa.unparse(csvData);
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const link = document.createElement('a');
@@ -128,7 +126,7 @@ export default function Students() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+
       toast({ title: "CSV exported successfully" });
     } catch (error) {
       toast({ title: "Failed to export CSV", variant: "destructive" });
@@ -137,11 +135,11 @@ export default function Students() {
 
   // Filter students based on search and filters
   const filteredStudents = students.filter(student => {
-    const matchesSearch = !searchTerm || 
+    const matchesSearch = !searchTerm ||
       `${student.firstName} ${student.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.studentId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       student.email.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesGrade = !gradeFilter || student.grade.toString() === gradeFilter;
     const matchesSection = !sectionFilter || student.section === sectionFilter;
     const matchesStatus = !statusFilter || student.status === statusFilter;
@@ -151,8 +149,8 @@ export default function Students() {
 
   return (
     <div>
-      <Header 
-        title="Students Management" 
+      <Header
+        title="Students Management"
         subtitle="Manage student records, enrollment, and academic information"
         onAddClick={() => setShowStudentForm(true)}
         addButtonText="Add New Student"
@@ -172,7 +170,7 @@ export default function Students() {
                   className="pl-10"
                 />
               </div>
-              
+
               <Select value={gradeFilter} onValueChange={setGradeFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Grades" />
@@ -185,7 +183,7 @@ export default function Students() {
                   <SelectItem value="12">Grade 12</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Select value={sectionFilter} onValueChange={setSectionFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Sections" />
@@ -198,7 +196,7 @@ export default function Students() {
                   <SelectItem value="D">Section D</SelectItem>
                 </SelectContent>
               </Select>
-              
+
               <Select value={statusFilter} onValueChange={setStatusFilter}>
                 <SelectTrigger>
                   <SelectValue placeholder="All Status" />
@@ -243,8 +241,8 @@ export default function Students() {
                 <Users className="mx-auto h-12 w-12 text-gray-300 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No students found</h3>
                 <p className="text-gray-500 mb-4">
-                  {students.length === 0 
-                    ? "Get started by adding your first student." 
+                  {students.length === 0
+                    ? "Get started by adding your first student."
                     : "Try adjusting your search or filter criteria."
                   }
                 </p>
@@ -303,10 +301,10 @@ export default function Students() {
                           {student.section}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <Badge 
+                          <Badge
                             variant={
                               student.status === 'active' ? 'default' :
-                              student.status === 'graduated' ? 'secondary' : 'destructive'
+                                student.status === 'graduated' ? 'secondary' : 'destructive'
                             }
                           >
                             {student.status}
@@ -322,9 +320,9 @@ export default function Students() {
                                 <Edit className="w-4 h-4" />
                               </Button>
                               {user?.role === 'admin' && (
-                                <Button 
-                                  variant="ghost" 
-                                  size="sm" 
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleDelete(student.id)}
                                   disabled={deleteMutation.isPending}
                                 >
@@ -366,8 +364,8 @@ export default function Students() {
         </Card>
       </div>
 
-      <StudentForm 
-        open={showStudentForm} 
+      <StudentForm
+        open={showStudentForm}
         onOpenChange={handleFormClose}
         student={editingStudent}
       />
@@ -400,12 +398,12 @@ export default function Students() {
                         {viewingStudent.email}
                       </p>
                     </div>
-                    {viewingStudent.phone && (
+                    {viewingStudent.phoneNumber && (
                       <div>
                         <label className="text-sm font-medium text-gray-500">Phone</label>
                         <p className="text-sm text-gray-900 flex items-center">
                           <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                          {viewingStudent.phone}
+                          {viewingStudent.phoneNumber}
                         </p>
                       </div>
                     )}
@@ -435,10 +433,10 @@ export default function Students() {
                     </div>
                     <div>
                       <label className="text-sm font-medium text-gray-500">Status</label>
-                      <Badge 
+                      <Badge
                         variant={
                           viewingStudent.status === 'active' ? 'default' :
-                          viewingStudent.status === 'graduated' ? 'secondary' : 'destructive'
+                            viewingStudent.status === 'graduated' ? 'secondary' : 'destructive'
                         }
                         className="mt-1"
                       >
@@ -462,37 +460,13 @@ export default function Students() {
                 </div>
               )}
 
-              {/* Parent/Guardian Information */}
-              {(viewingStudent.parentName || viewingStudent.parentPhone) && (
-                <div className="space-y-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Parent/Guardian Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {viewingStudent.parentName && (
-                      <div>
-                        <label className="text-sm font-medium text-gray-500">Parent/Guardian Name</label>
-                        <p className="text-sm text-gray-900">{viewingStudent.parentName}</p>
-                      </div>
-                    )}
-                    {viewingStudent.parentPhone && (
-                      <div>
-                        <label className="text-sm font-medium text-gray-500">Parent Phone</label>
-                        <p className="text-sm text-gray-900 flex items-center">
-                          <Phone className="w-4 h-4 mr-2 text-gray-400" />
-                          {viewingStudent.parentPhone}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Action Buttons */}
               <div className="flex justify-end space-x-3 pt-4 border-t">
                 <Button variant="outline" onClick={() => setViewingStudent(undefined)}>
                   Close
                 </Button>
                 {(user?.role === 'admin' || user?.role === 'teacher') && (
-                  <Button 
+                  <Button
                     onClick={() => {
                       setViewingStudent(undefined);
                       handleEdit(viewingStudent);

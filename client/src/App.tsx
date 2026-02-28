@@ -18,6 +18,7 @@ import Analytics from "@/pages/analytics";
 import TeacherPanel from "@/pages/teacher-panel";
 import StudentPanel from "@/pages/student-panel";
 import NotFound from "@/pages/not-found";
+import Calendar from "@/pages/calendar";
 
 interface RouterProps {
   userRole: UserRole;
@@ -46,9 +47,9 @@ function Router({ userRole, userId }: RouterProps) {
 
   // Access control based on role
   const hasAccess = (path: string, role: UserRole): boolean => {
-    const adminPaths = ['/', '/students', '/teachers', '/courses', '/attendance', '/marks', '/analytics'];
-    const teacherPaths = ['/teacher-panel', '/students', '/courses', '/attendance', '/marks'];
-    const studentPaths = ['/student-panel'];
+    const adminPaths = ['/', '/students', '/teachers', '/courses', '/attendance', '/marks', '/analytics', '/calendar'];
+    const teacherPaths = ['/teacher-panel', '/students', '/courses', '/attendance', '/marks', '/calendar'];
+    const studentPaths = ['/student-panel', '/calendar'];
 
     switch (role) {
       case 'admin': return adminPaths.includes(path) || teacherPaths.includes(path) || studentPaths.includes(path);
@@ -73,6 +74,7 @@ function Router({ userRole, userId }: RouterProps) {
               <Route path="/attendance" component={Attendance} />
               <Route path="/marks" component={Marks} />
               <Route path="/analytics" component={Analytics} />
+              <Route path="/calendar" component={Calendar} />
             </>
           )}
 
@@ -86,6 +88,7 @@ function Router({ userRole, userId }: RouterProps) {
                   <Route path="/courses" component={Courses} />
                   <Route path="/attendance" component={Attendance} />
                   <Route path="/marks" component={Marks} />
+                  <Route path="/calendar" component={Calendar} />
                 </>
               )}
             </>
@@ -93,7 +96,10 @@ function Router({ userRole, userId }: RouterProps) {
 
           {/* Student Routes */}
           {(userRole === 'student' || userRole === 'admin') && (
-            <Route path="/student-panel" component={StudentPanel} />
+            <>
+              <Route path="/student-panel" component={StudentPanel} />
+              <Route path="/calendar" component={Calendar} />
+            </>
           )}
 
           <Route component={NotFound} />
@@ -124,12 +130,12 @@ function App() {
         <Toaster />
         {!user ? (
           showSignup ? (
-            <SignupForm 
+            <SignupForm
               onSignup={login}
               onBackToLogin={() => setShowSignup(false)}
             />
           ) : (
-            <LoginForm 
+            <LoginForm
               onLogin={login}
               onShowSignup={() => setShowSignup(true)}
             />

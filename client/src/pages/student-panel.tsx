@@ -11,21 +11,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { 
-  BookOpen, Calendar, ClipboardList, 
+import { useAuth } from "@/hooks/useAuth";
+import {
+  BookOpen, Calendar, ClipboardList,
   CheckCircle, Clock, AlertCircle, FileText, Upload,
-  Trophy, Award, GraduationCap, TrendingUp
+  Trophy, Award, GraduationCap, TrendingUp, Users, Mail
 } from "lucide-react";
-import type { Assignment, AssignmentSubmission, Course, StudentWithGPA } from "@shared/schema";
+import type { Assignment, AssignmentSubmission, Course, StudentWithGPA, Teacher } from "@shared/schema";
 
 export default function StudentPanel() {
   const [showSubmissionForm, setShowSubmissionForm] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
 
-  // Sample student ID - in a real app, this would come from authentication
-  const studentId = "student-001";
+  // Get student ID from auth - use profileId or user.id
+  const studentId = user?.profileId || user?.id || "";
 
   const { data: assignments = [] } = useQuery<Assignment[]>({
     queryKey: ["/api/assignments"],
@@ -37,6 +39,11 @@ export default function StudentPanel() {
 
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ["/api/courses"],
+  });
+
+  const { data: studentTeachers = [] } = useQuery<Teacher[]>({
+    queryKey: [user?.id ? `/api/students/${user.id}/teachers` : "/api/students/"],
+    enabled: !!user?.id,
   });
 
   const { data: studentsWithGPA = [] } = useQuery<StudentWithGPA[]>({
@@ -61,7 +68,7 @@ export default function StudentPanel() {
     if (!selectedAssignment) return;
 
     const formData = new FormData(e.target as HTMLFormElement);
-    
+
     const submissionData = {
       assignmentId: selectedAssignment.id,
       studentId: studentId,
@@ -73,8 +80,8 @@ export default function StudentPanel() {
     submitAssignmentMutation.mutate(submissionData);
   };
 
-  const getSubmissionStatus = (assignmentId: number) => {
-    const submission = submissions.find((sub) => sub.assignmentId === assignmentId && sub.studentId === studentId);
+  const getSubmissionStatus = (assignmentId: string | number) => {
+    const submission = submissions.find((sub) => String(sub.assignmentId) === String(assignmentId) && sub.studentId === studentId);
     return submission;
   };
 
@@ -82,23 +89,23 @@ export default function StudentPanel() {
     const submission = getSubmissionStatus(assignment.id);
     const dueDate = new Date(assignment.dueDate);
     const now = new Date();
-    
+
     if (submission) {
       if (submission.grade !== null && submission.grade !== undefined) {
         return <Badge className="bg-purple-100 text-purple-800">Graded</Badge>;
       }
       return <Badge className="bg-blue-100 text-blue-800">Submitted</Badge>;
     }
-    
+
     if (dueDate < now) {
       return <Badge className="bg-red-100 text-red-800">Overdue</Badge>;
     }
-    
+
     const hoursUntilDue = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
     if (hoursUntilDue <= 24) {
       return <Badge className="bg-yellow-100 text-yellow-800">Due Soon</Badge>;
     }
-    
+
     return <Badge className="bg-green-100 text-green-800">Pending</Badge>;
   };
 
@@ -122,7 +129,7 @@ export default function StudentPanel() {
     const now = new Date();
     const diffTime = due.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
+
     if (diffDays < 0) return "Overdue";
     if (diffDays === 0) return "Due Today";
     if (diffDays === 1) return "Due Tomorrow";
@@ -133,10 +140,10 @@ export default function StudentPanel() {
     const submission = getSubmissionStatus(assignment.id);
     const dueDate = new Date(assignment.dueDate);
     const now = new Date();
-    
+
     if (submission) return "text-blue-600";
     if (dueDate < now) return "text-red-600";
-    
+
     const hoursUntilDue = (dueDate.getTime() - now.getTime()) / (1000 * 60 * 60);
     if (hoursUntilDue <= 24) return "text-yellow-600";
     return "text-green-600";
@@ -156,14 +163,14 @@ export default function StudentPanel() {
   }).length;
 
   // Sort assignments by due date
-  const sortedAssignments = [...assignments].sort((a, b) => 
+  const sortedAssignments = [...assignments].sort((a, b) =>
     new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime()
   );
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <Header title="Student Panel" subtitle="Track your assignments, homework, and academic progress" />
-      
+
       <main className="p-6">
         <div className="max-w-7xl mx-auto space-y-6">
           {/* Student Performance Overview */}
@@ -268,7 +275,7 @@ export default function StudentPanel() {
                   {sortedAssignments.map((assignment) => {
                     const course = courses.find(c => c.id === assignment.courseId);
                     const submission = getSubmissionStatus(assignment.id);
-                    
+
                     return (
                       <Card key={assignment.id} className="border-l-4 border-l-blue-500">
                         <CardContent className="p-4">
@@ -279,9 +286,9 @@ export default function StudentPanel() {
                                 {getAssignmentTypeBadge(assignment.type)}
                                 {getAssignmentStatusBadge(assignment)}
                               </div>
-                              
+
                               <p className="text-sm text-gray-600 mb-2">{assignment.description}</p>
-                              
+
                               <div className="flex items-center space-x-4 text-sm text-gray-500">
                                 <span className="flex items-center">
                                   <BookOpen className="w-4 h-4 mr-1" />
@@ -296,12 +303,12 @@ export default function StudentPanel() {
                                   {getDaysUntilDue(assignment.dueDate)}
                                 </span>
                               </div>
-                              
+
                               {submission && (
                                 <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                                   <div className="flex items-center justify-between">
                                     <span className="text-sm text-blue-800">
-                                      Submitted on: {new Date(submission.submittedAt).toLocaleDateString()}
+                                      Submitted on: {submission.submittedAt ? new Date(submission.submittedAt as string).toLocaleDateString() : 'N/A'}
                                     </span>
                                     {submission.grade !== null && submission.grade !== undefined && (
                                       <span className="text-sm font-semibold text-blue-800">
@@ -317,18 +324,18 @@ export default function StudentPanel() {
                                 </div>
                               )}
                             </div>
-                            
+
                             <div className="ml-4">
                               {!submission && new Date(assignment.dueDate) >= new Date() && (
-                                <Dialog 
-                                  open={showSubmissionForm && selectedAssignment?.id === assignment.id} 
+                                <Dialog
+                                  open={showSubmissionForm && selectedAssignment?.id === assignment.id}
                                   onOpenChange={(open) => {
                                     setShowSubmissionForm(open);
                                     if (!open) setSelectedAssignment(null);
                                   }}
                                 >
                                   <DialogTrigger asChild>
-                                    <Button 
+                                    <Button
                                       size="sm"
                                       onClick={() => setSelectedAssignment(assignment)}
                                       className="bg-green-600 hover:bg-green-700"
@@ -348,12 +355,12 @@ export default function StudentPanel() {
                                       </div>
                                       <div>
                                         <Label htmlFor="submissionText">Your Submission</Label>
-                                        <Textarea 
-                                          id="submissionText" 
-                                          name="submissionText" 
+                                        <Textarea
+                                          id="submissionText"
+                                          name="submissionText"
                                           placeholder="Enter your assignment content, answer, or notes here..."
                                           rows={6}
-                                          required 
+                                          required
                                         />
                                       </div>
                                       <div className="bg-yellow-50 p-3 rounded-lg">
@@ -361,9 +368,9 @@ export default function StudentPanel() {
                                           <strong>Due:</strong> {assignment.dueDate} ({getDaysUntilDue(assignment.dueDate)})
                                         </p>
                                       </div>
-                                      <Button 
-                                        type="submit" 
-                                        className="w-full" 
+                                      <Button
+                                        type="submit"
+                                        className="w-full"
                                         disabled={submitAssignmentMutation.isPending}
                                       >
                                         {submitAssignmentMutation.isPending ? "Submitting..." : "Submit Assignment"}
@@ -372,14 +379,14 @@ export default function StudentPanel() {
                                   </DialogContent>
                                 </Dialog>
                               )}
-                              
+
                               {submission && (
                                 <div className="text-center">
                                   <CheckCircle className="w-8 h-8 text-green-600 mx-auto mb-1" />
                                   <p className="text-xs text-green-600">Submitted</p>
                                 </div>
                               )}
-                              
+
                               {!submission && new Date(assignment.dueDate) < new Date() && (
                                 <div className="text-center">
                                   <AlertCircle className="w-8 h-8 text-red-600 mx-auto mb-1" />
@@ -430,12 +437,12 @@ export default function StudentPanel() {
                       .map((submission) => {
                         const assignment = assignments.find(a => a.id === submission.assignmentId);
                         const course = courses.find(c => c.id === assignment?.courseId);
-                        
+
                         return (
                           <TableRow key={submission.id}>
                             <TableCell className="font-medium">{assignment?.title}</TableCell>
                             <TableCell>{course?.subject}</TableCell>
-                            <TableCell>{new Date(submission.submittedAt).toLocaleDateString()}</TableCell>
+                            <TableCell>{submission.submittedAt ? new Date(submission.submittedAt as string).toLocaleDateString() : 'N/A'}</TableCell>
                             <TableCell>
                               {submission.grade !== null && submission.grade !== undefined ? (
                                 <span className="font-semibold text-green-600">

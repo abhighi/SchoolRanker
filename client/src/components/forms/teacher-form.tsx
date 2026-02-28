@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTeacherSchema, type InsertTeacher, type Teacher } from "@shared/schema";
@@ -21,23 +22,25 @@ export function TeacherForm({ open, onOpenChange, teacher }: TeacherFormProps) {
   const queryClient = useQueryClient();
   const isEditing = !!teacher;
 
-  const form = useForm<InsertTeacher>({
-    resolver: zodResolver(insertTeacherSchema),
-    defaultValues: teacher ? {
-      teacherId: teacher.teacherId,
-      firstName: teacher.firstName,
-      lastName: teacher.lastName,
-      email: teacher.email,
-      phoneNumber: teacher.phoneNumber || "",
-      address: teacher.address || "",
-      subject: teacher.subject,
-      qualification: teacher.qualification || "",
-      experience: teacher.experience || 0,
-      salary: teacher.salary || "",
-      joinDate: teacher.joinDate,
-      status: teacher.status as "active" | "inactive",
-      profileImage: teacher.profileImage || "",
-    } : {
+  const getDefaultValues = (): InsertTeacher => {
+    if (teacher) {
+      return {
+        teacherId: teacher.teacherId,
+        firstName: teacher.firstName,
+        lastName: teacher.lastName,
+        email: teacher.email,
+        phoneNumber: teacher.phoneNumber || "",
+        address: teacher.address || "",
+        subject: teacher.subject,
+        qualification: teacher.qualification || "",
+        experience: teacher.experience || 0,
+        salary: teacher.salary || "",
+        joinDate: teacher.joinDate,
+        status: teacher.status as "active" | "inactive",
+        profileImage: teacher.profileImage || "",
+      };
+    }
+    return {
       teacherId: "",
       firstName: "",
       lastName: "",
@@ -51,8 +54,20 @@ export function TeacherForm({ open, onOpenChange, teacher }: TeacherFormProps) {
       joinDate: new Date().toISOString().split('T')[0],
       status: "active",
       profileImage: "",
-    },
+    };
+  };
+
+  const form = useForm<InsertTeacher>({
+    resolver: zodResolver(insertTeacherSchema),
+    defaultValues: getDefaultValues(),
   });
+
+  // Reset form when teacher prop changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset(getDefaultValues());
+    }
+  }, [open, teacher, form]);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertTeacher) => apiRequest("POST", "/api/teachers", data),

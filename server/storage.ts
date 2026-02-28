@@ -1,4 +1,4 @@
-import { 
+import {
   type Student, type InsertStudent,
   type Teacher, type InsertTeacher,
   type Course, type InsertCourse,
@@ -9,13 +9,13 @@ import {
   type Assignment, type InsertAssignment,
   type AssignmentSubmission, type InsertAssignmentSubmission,
   type Notification, type InsertNotification,
+  type CalendarEvent, type InsertCalendarEvent,
   type StudentWithGPA, type SubjectTopper,
-  students, teachers, courses, marks, attendance, courseEnrollments, 
-  users, assignments, assignmentSubmissions, notifications
+  students, teachers, courses, marks, attendance, courseEnrollments,
+  users, assignments, assignmentSubmissions, notifications, calendarEvents
 } from "@shared/schema";
-import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Student operations
@@ -25,7 +25,7 @@ export interface IStorage {
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: string, student: Partial<InsertStudent>): Promise<Student | undefined>;
   deleteStudent(id: string): Promise<boolean>;
-  
+
   // Teacher operations
   getTeacher(id: string): Promise<Teacher | undefined>;
   getAllTeachers(): Promise<Teacher[]>;
@@ -33,7 +33,7 @@ export interface IStorage {
   createTeacher(teacher: InsertTeacher): Promise<Teacher>;
   updateTeacher(id: string, teacher: Partial<InsertTeacher>): Promise<Teacher | undefined>;
   deleteTeacher(id: string): Promise<boolean>;
-  
+
   // Course operations
   getCourse(id: string): Promise<Course | undefined>;
   getAllCourses(): Promise<Course[]>;
@@ -43,7 +43,7 @@ export interface IStorage {
   deleteCourse(id: string): Promise<boolean>;
   getCoursesByGrade(grade: number): Promise<Course[]>;
   getCoursesByTeacher(teacherId: string): Promise<Course[]>;
-  
+
   // Mark operations
   getMark(id: string): Promise<Mark | undefined>;
   getAllMarks(): Promise<Mark[]>;
@@ -52,7 +52,7 @@ export interface IStorage {
   deleteMark(id: string): Promise<boolean>;
   getMarksByStudent(studentId: string): Promise<Mark[]>;
   getMarksByCourse(courseId: string): Promise<Mark[]>;
-  
+
   // Attendance operations
   getAttendance(id: string): Promise<Attendance | undefined>;
   getAllAttendance(): Promise<Attendance[]>;
@@ -61,7 +61,7 @@ export interface IStorage {
   deleteAttendance(id: string): Promise<boolean>;
   getAttendanceByStudent(studentId: string): Promise<Attendance[]>;
   getAttendanceByCourse(courseId: string): Promise<Attendance[]>;
-  
+
   // Course Enrollment operations
   getCourseEnrollment(id: string): Promise<CourseEnrollment | undefined>;
   getAllCourseEnrollments(): Promise<CourseEnrollment[]>;
@@ -70,7 +70,7 @@ export interface IStorage {
   deleteCourseEnrollment(id: string): Promise<boolean>;
   getEnrollmentsByStudent(studentId: string): Promise<CourseEnrollment[]>;
   getEnrollmentsByCourse(courseId: string): Promise<CourseEnrollment[]>;
-  
+
   // User operations
   getUser(id: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
@@ -79,7 +79,7 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
-  
+
   // Assignment operations
   getAssignment(id: string): Promise<Assignment | undefined>;
   getAllAssignments(): Promise<Assignment[]>;
@@ -88,7 +88,7 @@ export interface IStorage {
   deleteAssignment(id: string): Promise<boolean>;
   getAssignmentsByTeacher(teacherId: string): Promise<Assignment[]>;
   getAssignmentsByCourse(courseId: string): Promise<Assignment[]>;
-  
+
   // Assignment Submission operations
   getAssignmentSubmission(id: string): Promise<AssignmentSubmission | undefined>;
   getAllAssignmentSubmissions(): Promise<AssignmentSubmission[]>;
@@ -108,6 +108,14 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   markNotificationAsRead(id: string): Promise<Notification | undefined>;
   deleteNotification(id: string): Promise<boolean>;
+
+  // Calendar operations
+  getAllCalendarEvents(): Promise<CalendarEvent[]>;
+  getCalendarEventsByMonth(year: number, month: number): Promise<CalendarEvent[]>;
+  getCalendarEvent(id: string): Promise<CalendarEvent | undefined>;
+  createCalendarEvent(event: InsertCalendarEvent): Promise<CalendarEvent>;
+  updateCalendarEvent(id: string, event: Partial<InsertCalendarEvent>): Promise<CalendarEvent | undefined>;
+  deleteCalendarEvent(id: string): Promise<boolean>;
 }
 
 // MemStorage removed - using DatabaseStorage only
@@ -411,21 +419,35 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(assignmentSubmissions).where(eq(assignmentSubmissions.assignmentId, assignmentId));
   }
 
-  // Analytics operations
+  // Analytics operations - Optimized to avoid N+1 queries
   async getStudentsWithGPA(): Promise<StudentWithGPA[]> {
-    const allStudents = await this.getAllStudents();
-    const studentsWithGPA: StudentWithGPA[] = [];
+    // Get all students and marks in a single query using join
+    const allMarks = await db.select({
+      studentId: marks.studentId,
+      marks: marks.marks,
+      totalMarks: marks.totalMarks,
+    }).from(marks);
 
-    for (const student of allStudents) {
-      const studentMarks = await this.getMarksByStudent(student.id);
-      
+    const allStudents = await db.select().from(students);
+
+    // Create a map of student marks for O(1) lookup
+    const marksByStudent = new Map<string, typeof allMarks>();
+    for (const mark of allMarks) {
+      if (!marksByStudent.has(mark.studentId)) {
+        marksByStudent.set(mark.studentId, []);
+      }
+      marksByStudent.get(mark.studentId)!.push(mark);
+    }
+
+    const studentsWithGPA: StudentWithGPA[] = allStudents.map(student => {
+      const studentMarks = marksByStudent.get(student.id) || [];
+
       if (studentMarks.length === 0) {
-        studentsWithGPA.push({
+        return {
           ...student,
           gpa: 0,
           totalMarks: 0,
-        });
-        continue;
+        };
       }
 
       let totalPercentage = 0;
@@ -440,36 +462,61 @@ export class DatabaseStorage implements IStorage {
       }
 
       const gpa = (totalPercentage / studentMarks.length) / 25;
-      
-      studentsWithGPA.push({
+
+      return {
         ...student,
         gpa: Math.round(gpa * 100) / 100,
         totalMarks: Math.round(totalMarksSum * 100) / 100,
-      });
-    }
+      };
+    });
 
     return studentsWithGPA;
   }
 
+  // Get subject toppers - Optimized to avoid N+1 queries
   async getSubjectToppers(): Promise<SubjectTopper[]> {
-    const allCourses = await this.getAllCourses();
+    // Get all courses and marks in bulk
+    const allCourses = await db.select().from(courses);
+    const allMarks = await db.select({
+      studentId: marks.studentId,
+      courseId: marks.courseId,
+      marks: marks.marks,
+      totalMarks: marks.totalMarks,
+    }).from(marks);
+    const allStudents = await db.select().from(students);
+
+    // Create a map of students for O(1) lookup
+    const studentMap = new Map<string, typeof allStudents[0]>();
+    for (const student of allStudents) {
+      studentMap.set(student.id, student);
+    }
+
+    // Create a map of marks by course
+    const marksByCourse = new Map<string, typeof allMarks>();
+    for (const mark of allMarks) {
+      if (!marksByCourse.has(mark.courseId)) {
+        marksByCourse.set(mark.courseId, []);
+      }
+      marksByCourse.get(mark.courseId)!.push(mark);
+    }
+
     const toppers: SubjectTopper[] = [];
 
     for (const course of allCourses) {
-      const courseMarks = await this.getMarksByCourse(course.id);
-      
+      const courseMarks = marksByCourse.get(course.id) || [];
+
       if (courseMarks.length === 0) continue;
 
-      const studentPerformance = new Map<string, { totalMarks: number; totalPossible: number; student?: Student }>();
+      const studentPerformance = new Map<string, { totalMarks: number; totalPossible: number }>();
 
       for (const mark of courseMarks) {
         const marksNum = parseFloat(mark.marks);
         const totalMarksNum = parseFloat(mark.totalMarks);
-        
+
         if (!studentPerformance.has(mark.studentId)) {
           studentPerformance.set(mark.studentId, { totalMarks: 0, totalPossible: 0 });
         }
-        
+
         const current = studentPerformance.get(mark.studentId)!;
         current.totalMarks += marksNum;
         current.totalPossible += totalMarksNum;
@@ -487,7 +534,7 @@ export class DatabaseStorage implements IStorage {
       }
 
       if (bestStudentId) {
-        const student = await this.getStudent(bestStudentId);
+        const student = studentMap.get(bestStudentId);
         if (student) {
           toppers.push({
             subject: course.subject,
@@ -502,10 +549,15 @@ export class DatabaseStorage implements IStorage {
     return toppers;
   }
 
+  // Get attendance stats - Optimized with single query
   async getAttendanceStats(): Promise<{ totalClasses: number; presentClasses: number; percentage: number }> {
-    const allAttendance = await this.getAllAttendance();
-    const totalClasses = allAttendance.length;
-    const presentClasses = allAttendance.filter(att => att.status === 'present').length;
+    const result = await db.select({
+      total: sql<number>`count(*)`,
+      present: sql<number>`count(*) filter (where ${attendance.status} = 'present')`,
+    }).from(attendance);
+
+    const totalClasses = result[0]?.total || 0;
+    const presentClasses = result[0]?.present || 0;
     const percentage = totalClasses > 0 ? (presentClasses / totalClasses) * 100 : 0;
 
     return {
@@ -537,6 +589,57 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNotification(id: string): Promise<boolean> {
     const result = await db.delete(notifications).where(eq(notifications.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Calendar operations
+  async getAllCalendarEvents(): Promise<CalendarEvent[]> {
+    return await db.select().from(calendarEvents).orderBy(calendarEvents.eventDate);
+  }
+
+  async getCalendarEventsByMonth(year: number, month: number): Promise<CalendarEvent[]> {
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
+    return await db.select().from(calendarEvents)
+      .where(sql`${calendarEvents.eventDate} >= ${startDate.toISOString().split('T')[0]} AND ${calendarEvents.eventDate} <= ${endDate.toISOString().split('T')[0]}`)
+      .orderBy(calendarEvents.eventDate);
+  }
+
+  async getCalendarEvent(id: string): Promise<CalendarEvent | undefined> {
+    const [event] = await db.select().from(calendarEvents).where(eq(calendarEvents.id, id));
+    return event || undefined;
+  }
+
+  async createCalendarEvent(event: InsertCalendarEvent): Promise<CalendarEvent> {
+    const [created] = await db.insert(calendarEvents).values({
+      title: event.title,
+      description: event.description,
+      eventDate: event.eventDate,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      eventType: event.eventType,
+      grade: event.grade,
+      createdBy: event.createdBy,
+    }).returning();
+    return created;
+  }
+
+  async updateCalendarEvent(id: string, event: Partial<InsertCalendarEvent>): Promise<CalendarEvent | undefined> {
+    const updateData: Partial<typeof calendarEvents.$inferInsert> = {};
+    if (event.title !== undefined) updateData.title = event.title;
+    if (event.description !== undefined) updateData.description = event.description;
+    if (event.eventDate !== undefined) updateData.eventDate = event.eventDate;
+    if (event.startTime !== undefined) updateData.startTime = event.startTime;
+    if (event.endTime !== undefined) updateData.endTime = event.endTime;
+    if (event.eventType !== undefined) updateData.eventType = event.eventType;
+    if (event.grade !== undefined) updateData.grade = event.grade;
+
+    const [updated] = await db.update(calendarEvents).set(updateData).where(eq(calendarEvents.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async deleteCalendarEvent(id: string): Promise<boolean> {
+    const result = await db.delete(calendarEvents).where(eq(calendarEvents.id, id));
     return (result.rowCount ?? 0) > 0;
   }
 }

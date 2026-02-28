@@ -13,7 +13,7 @@ export interface Notification {
   title: string;
   message: string;
   type: 'info' | 'success' | 'warning' | 'error';
-  timestamp: Date;
+  createdAt: Date;
   read: boolean;
   actionUrl?: string;
   userId: string;
@@ -139,9 +139,8 @@ export function NotificationSystem({ userRole, userId }: NotificationSystemProps
                 {notifications.map((notification) => (
                   <div
                     key={notification.id}
-                    className={`p-4 hover:bg-gray-50 ${
-                      !notification.read ? 'bg-blue-50' : ''
-                    }`}
+                    className={`p-4 hover:bg-gray-50 ${!notification.read ? 'bg-blue-50' : ''
+                      }`}
                   >
                     <div className="flex items-start space-x-3">
                       {getIcon(notification.type)}
@@ -152,7 +151,7 @@ export function NotificationSystem({ userRole, userId }: NotificationSystemProps
                           </p>
                           <div className="flex items-center space-x-2">
                             <span className="text-xs text-gray-500">
-                              {formatTimestamp(notification.timestamp)}
+                              {formatTimestamp(notification.createdAt)}
                             </span>
                             <Button
                               variant="ghost"
