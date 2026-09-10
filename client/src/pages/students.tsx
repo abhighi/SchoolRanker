@@ -11,8 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Search, Eye, Edit, Trash2, Download, Printer, Users, Phone, Mail, MapPin } from "lucide-react";
+import { Search, Eye, Edit, Trash2, Download, Printer, Users, Phone, Mail, MapPin, Binary } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { sortByStudentId, binarySearchByStudentId } from "@/lib/search";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import Papa from 'papaparse';
@@ -26,6 +27,12 @@ export default function Students() {
   const [gradeFilter, setGradeFilter] = useState("");
   const [sectionFilter, setSectionFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+
+  // Binary-search lookup by exact Student ID (educational algorithm showcase).
+  const [idQuery, setIdQuery] = useState("");
+  const [idSearchResult, setIdSearchResult] = useState<
+    { student: Student | null; steps: number; query: string } | null
+  >(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -65,6 +72,18 @@ export default function Students() {
 
   const handleView = (student: Student) => {
     setViewingStudent(student);
+  };
+
+  // Sort the loaded students by ID (QuickSort-style ordering) and binary-search
+  // for an exact Student ID — O(log n) instead of scanning every row.
+  const runBinarySearch = () => {
+    if (!idQuery.trim()) {
+      setIdSearchResult(null);
+      return;
+    }
+    const sorted = sortByStudentId(students);
+    const { result, steps } = binarySearchByStudentId(sorted, idQuery);
+    setIdSearchResult({ student: result, steps, query: idQuery.trim() });
   };
 
   const exportToPDF = () => {
@@ -152,11 +171,74 @@ export default function Students() {
       <Header
         title="Students Management"
         subtitle="Manage student records, enrollment, and academic information"
-        onAddClick={() => setShowStudentForm(true)}
-        addButtonText="Add New Student"
+        onAddClick={(user?.role === 'admin' || user?.role === 'teacher') ? () => setShowStudentForm(true) : undefined}
+        addButtonText={(user?.role === 'admin' || user?.role === 'teacher') ? "Add New Student" : undefined}
       />
 
       <div className="p-6 space-y-6">
+        {/* Binary Search lookup by exact Student ID */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center text-base">
+              <Binary className="w-4 h-4 mr-2 text-primary" />
+              Quick Lookup by Student ID
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+              <Input
+                placeholder="Exact Student ID, e.g. STU-0042"
+                value={idQuery}
+                onChange={(e) => setIdQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') runBinarySearch(); }}
+                className="sm:max-w-xs"
+              />
+              <Button onClick={runBinarySearch}>
+                <Search className="w-4 h-4 mr-2" />
+                Search
+              </Button>
+              {idSearchResult && (
+                <Button variant="ghost" onClick={() => { setIdQuery(""); setIdSearchResult(null); }}>
+                  Clear
+                </Button>
+              )}
+            </div>
+
+            {idSearchResult && (
+              <div className="mt-4">
+                {idSearchResult.student ? (
+                  <div className="flex items-center justify-between p-4 rounded-lg border bg-green-50 border-green-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border">
+                        <Users className="w-5 h-5 text-gray-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-900">
+                          {idSearchResult.student.firstName} {idSearchResult.student.lastName}
+                          <span className="text-sm text-gray-500 ml-2">{idSearchResult.student.studentId}</span>
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Grade {idSearchResult.student.grade} • Section {idSearchResult.student.section} • {idSearchResult.student.email}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">Found in {idSearchResult.steps} comparison{idSearchResult.steps === 1 ? "" : "s"}</Badge>
+                      <Button variant="ghost" size="sm" onClick={() => handleView(idSearchResult.student!)}>
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-lg border bg-yellow-50 border-yellow-200 text-sm text-yellow-800">
+                    No student found with ID “{idSearchResult.query}”. Searched {students.length} records in {idSearchResult.steps} comparison{idSearchResult.steps === 1 ? "" : "s"} (binary search, O(log n)).
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Search and Filters */}
         <Card>
           <CardContent className="p-6">
@@ -246,9 +328,11 @@ export default function Students() {
                     : "Try adjusting your search or filter criteria."
                   }
                 </p>
-                <Button onClick={() => setShowStudentForm(true)}>
-                  Add New Student
-                </Button>
+                {(user?.role === 'admin' || user?.role === 'teacher') && (
+                  <Button onClick={() => setShowStudentForm(true)}>
+                    Add New Student
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -319,16 +403,14 @@ export default function Students() {
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(student)}>
                                 <Edit className="w-4 h-4" />
                               </Button>
-                              {user?.role === 'admin' && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDelete(student.id)}
-                                  disabled={deleteMutation.isPending}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              )}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(student.id)}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
                             </>
                           )}
                         </td>

@@ -11,11 +11,14 @@ import {
   type Notification, type InsertNotification,
   type CalendarEvent, type InsertCalendarEvent,
   type StudentWithGPA, type SubjectTopper,
+  type Announcement, type InsertAnnouncement,
+  type AnnouncementComment, type InsertAnnouncementComment,
   students, teachers, courses, marks, attendance, courseEnrollments,
-  users, assignments, assignmentSubmissions, notifications, calendarEvents
+  users, assignments, assignmentSubmissions, notifications, calendarEvents,
+  announcements, announcementComments
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray, or, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // Student operations
@@ -109,6 +112,18 @@ export interface IStorage {
   markNotificationAsRead(id: string): Promise<Notification | undefined>;
   deleteNotification(id: string): Promise<boolean>;
 
+  // Announcement operations
+  getAnnouncement(id: string): Promise<Announcement | undefined>;
+  getAnnouncementsForGrades(grades: number[]): Promise<Announcement[]>;
+  getAllAnnouncements(): Promise<Announcement[]>;
+  createAnnouncement(announcement: typeof announcements.$inferInsert): Promise<Announcement>;
+  deleteAnnouncement(id: string): Promise<boolean>;
+  getCommentsByAnnouncement(announcementId: string): Promise<AnnouncementComment[]>;
+  getCommentsForAnnouncements(announcementIds: string[]): Promise<AnnouncementComment[]>;
+  createAnnouncementComment(comment: typeof announcementComments.$inferInsert): Promise<AnnouncementComment>;
+  getAnnouncementComment(id: string): Promise<AnnouncementComment | undefined>;
+  deleteAnnouncementComment(id: string): Promise<boolean>;
+
   // Calendar operations
   getAllCalendarEvents(): Promise<CalendarEvent[]>;
   getCalendarEventsByMonth(year: number, month: number): Promise<CalendarEvent[]>;
@@ -147,6 +162,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteStudent(id: string): Promise<boolean> {
+    // Remove dependent rows first (no ON DELETE CASCADE in the schema), then the
+    // student's login account, then the student itself.
+    await db.delete(assignmentSubmissions).where(eq(assignmentSubmissions.studentId, id));
+    await db.delete(marks).where(eq(marks.studentId, id));
+    await db.delete(attendance).where(eq(attendance.studentId, id));
+    await db.delete(courseEnrollments).where(eq(courseEnrollments.studentId, id));
+    await db.delete(users).where(eq(users.profileId, id));
     const result = await db.delete(students).where(eq(students.id, id));
     return (result.rowCount ?? 0) > 0;
   }
@@ -177,6 +199,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteTeacher(id: string): Promise<boolean> {
+    // Delete this teacher's assignments (and their submissions), unassign their
+    // courses (kept, but teacherless), clear any graded-by references, remove the
+    // login account, then delete the teacher.
+    const teacherAssignments = await db.select().from(assignments).where(eq(assignments.teacherId, id));
+    for (const a of teacherAssignments) {
+      await db.delete(assignmentSubmissions).where(eq(assignmentSubmissions.assignmentId, a.id));
+    }
+    await db.delete(assignments).where(eq(assignments.teacherId, id));
+    await db.update(assignmentSubmissions).set({ gradedBy: null }).where(eq(assignmentSubmissions.gradedBy, id));
+    await db.update(courses).set({ teacherId: null }).where(eq(courses.teacherId, id));
+    await db.delete(users).where(eq(users.profileId, id));
     const result = await db.delete(teachers).where(eq(teachers.id, id));
     return (result.rowCount ?? 0) > 0;
   }
@@ -207,6 +240,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteCourse(id: string): Promise<boolean> {
+    // Remove everything tied to this course first (assignments + their
+    // submissions, marks, attendance, enrollments), then the course.
+    const courseAssignments = await db.select().from(assignments).where(eq(assignments.courseId, id));
+    for (const a of courseAssignments) {
+      await db.delete(assignmentSubmissions).where(eq(assignmentSubmissions.assignmentId, a.id));
+    }
+    await db.delete(assignments).where(eq(assignments.courseId, id));
+    await db.delete(marks).where(eq(marks.courseId, id));
+    await db.delete(attendance).where(eq(attendance.courseId, id));
+    await db.delete(courseEnrollments).where(eq(courseEnrollments.courseId, id));
     const result = await db.delete(courses).where(eq(courses.id, id));
     return (result.rowCount ?? 0) > 0;
   }
@@ -589,6 +632,69 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNotification(id: string): Promise<boolean> {
     const result = await db.delete(notifications).where(eq(notifications.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  // Announcement operations
+  async getAnnouncement(id: string): Promise<Announcement | undefined> {
+    const [a] = await db.select().from(announcements).where(eq(announcements.id, id));
+    return a || undefined;
+  }
+
+  async getAllAnnouncements(): Promise<Announcement[]> {
+    return await db.select().from(announcements).orderBy(desc(announcements.createdAt));
+  }
+
+  // Announcements visible for a set of grades: those targeted at one of the
+  // grades, plus school-wide ("everyone") posts where targetGrade is null.
+  async getAnnouncementsForGrades(grades: number[]): Promise<Announcement[]> {
+    if (grades.length === 0) {
+      return await db.select().from(announcements)
+        .where(isNull(announcements.targetGrade))
+        .orderBy(desc(announcements.createdAt));
+    }
+    return await db.select().from(announcements)
+      .where(or(isNull(announcements.targetGrade), inArray(announcements.targetGrade, grades)))
+      .orderBy(desc(announcements.createdAt));
+  }
+
+  async createAnnouncement(announcement: typeof announcements.$inferInsert): Promise<Announcement> {
+    const [created] = await db.insert(announcements).values(announcement).returning();
+    return created;
+  }
+
+  async deleteAnnouncement(id: string): Promise<boolean> {
+    // Remove comments first (no ON DELETE CASCADE), then the announcement.
+    await db.delete(announcementComments).where(eq(announcementComments.announcementId, id));
+    const result = await db.delete(announcements).where(eq(announcements.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async getCommentsByAnnouncement(announcementId: string): Promise<AnnouncementComment[]> {
+    return await db.select().from(announcementComments)
+      .where(eq(announcementComments.announcementId, announcementId))
+      .orderBy(announcementComments.createdAt);
+  }
+
+  async getCommentsForAnnouncements(announcementIds: string[]): Promise<AnnouncementComment[]> {
+    if (announcementIds.length === 0) return [];
+    return await db.select().from(announcementComments)
+      .where(inArray(announcementComments.announcementId, announcementIds))
+      .orderBy(announcementComments.createdAt);
+  }
+
+  async createAnnouncementComment(comment: typeof announcementComments.$inferInsert): Promise<AnnouncementComment> {
+    const [created] = await db.insert(announcementComments).values(comment).returning();
+    return created;
+  }
+
+  async getAnnouncementComment(id: string): Promise<AnnouncementComment | undefined> {
+    const [c] = await db.select().from(announcementComments).where(eq(announcementComments.id, id));
+    return c || undefined;
+  }
+
+  async deleteAnnouncementComment(id: string): Promise<boolean> {
+    const result = await db.delete(announcementComments).where(eq(announcementComments.id, id));
     return (result.rowCount ?? 0) > 0;
   }
 

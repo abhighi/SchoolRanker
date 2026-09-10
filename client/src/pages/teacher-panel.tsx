@@ -16,16 +16,17 @@ import { useAuth } from "@/hooks/useAuth";
 import { useLocation } from "wouter";
 import {
   BookOpen, Users, Calendar, ClipboardList,
-  Plus, Eye, CheckCircle, Clock, AlertCircle,
-  GraduationCap, FileText, Award
+  Plus, CheckCircle, Clock, AlertCircle,
+  GraduationCap, FileText, Award, GraduationCap as GradIcon, Save
 } from "lucide-react";
-import type { Assignment, Student, Course, Attendance } from "@shared/schema";
+import type { Assignment, Student, Course, Attendance, AssignmentSubmission } from "@shared/schema";
 
 export default function TeacherPanel() {
   const [selectedCourse, setSelectedCourse] = useState<string>("");
   const [showAssignmentForm, setShowAssignmentForm] = useState(false);
   const [showAttendanceForm, setShowAttendanceForm] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<string>("");
+  const [viewAssignment, setViewAssignment] = useState<Assignment | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user } = useAuth();
@@ -50,8 +51,16 @@ export default function TeacherPanel() {
     queryKey: ["/api/attendance"],
   });
 
-  const teacherCourses = courses.filter((course) => course.teacherId === teacherId);
-  const teacherAssignments = assignments.filter((assignment) => assignment.teacherId === teacherId);
+  // Submissions for this teacher's assignments (server already scopes to the
+  // teacher's own courses).
+  const { data: submissions = [] } = useQuery<AssignmentSubmission[]>({
+    queryKey: ["/api/assignment-submissions"],
+  });
+
+  // The server already scopes /api/courses and /api/assignments to this teacher,
+  // so use them directly (don't re-filter by a client-side id that may be stale).
+  const teacherCourses = courses;
+  const teacherAssignments = assignments;
   const recentAttendance = attendance.slice(-10); // Show last 10 attendance records
 
   const createAssignmentMutation = useMutation({
@@ -80,7 +89,7 @@ export default function TeacherPanel() {
 
   const updateAssignmentStatusMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
-      apiRequest("PATCH", `/api/assignments/${id}`, { status }),
+      apiRequest("PUT", `/api/assignments/${id}`, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
       toast({ title: "Assignment status updated" });
@@ -90,15 +99,27 @@ export default function TeacherPanel() {
     },
   });
 
+  const gradeSubmissionMutation = useMutation({
+    mutationFn: ({ id, grade, feedback }: { id: string; grade: number; feedback: string }) =>
+      apiRequest("PUT", `/api/assignment-submissions/${id}`, { grade, feedback }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/assignment-submissions"] });
+      toast({ title: "Submission graded" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save grade", variant: "destructive" });
+    },
+  });
+
   const handleCreateAssignment = (e: React.FormEvent) => {
     e.preventDefault();
     const formData = new FormData(e.target as HTMLFormElement);
 
+    // No course is chosen here — the server attaches the assignment to the
+    // course(s) this teacher teaches automatically.
     const assignmentData = {
       title: formData.get("title"),
       description: formData.get("description"),
-      courseId: formData.get("courseId"),
-      teacherId: teacherId,
       dueDate: formData.get("dueDate"),
       totalPoints: parseInt(formData.get("totalPoints") as string) || 100,
       type: formData.get("type"),
@@ -256,20 +277,12 @@ export default function TeacherPanel() {
                         <Label htmlFor="description">Description</Label>
                         <Textarea id="description" name="description" placeholder="Assignment description" />
                       </div>
-                      <div>
-                        <Label htmlFor="courseId">Course</Label>
-                        <Select name="courseId" required>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select course" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {teacherCourses.map((course) => (
-                              <SelectItem key={course.id} value={course.id.toString()}>
-                                {course.subject} - Grade {course.grade}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <div className="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                        This assignment will be posted to your {teacherCourses.length > 0
+                          ? teacherCourses.length === 1
+                            ? `class (${teacherCourses[0].subject} — Grade ${teacherCourses[0].grade}).`
+                            : `${teacherCourses.length} classes.`
+                          : "assigned class automatically."}
                       </div>
                       <div>
                         <Label htmlFor="type">Assignment Type</Label>
@@ -408,25 +421,33 @@ export default function TeacherPanel() {
                       const course = courses.find(c => c.id === assignment.courseId);
                       return (
                         <TableRow key={assignment.id}>
-                          <TableCell className="font-medium">{assignment.title}</TableCell>
+                          <TableCell className="font-medium">
+                            <button
+                              className="text-blue-600 hover:underline text-left"
+                              onClick={() => setViewAssignment(assignment)}
+                            >
+                              {assignment.title}
+                            </button>
+                          </TableCell>
                           <TableCell>{course?.subject} - Grade {course?.grade}</TableCell>
                           <TableCell>{getStatusBadge(assignment.type)}</TableCell>
                           <TableCell>{assignment.dueDate}</TableCell>
                           <TableCell>{getAssignmentStatusBadge(assignment.status)}</TableCell>
                           <TableCell>
                             <div className="flex space-x-2">
-                              <Button variant="outline" size="sm">
-                                <Eye className="w-4 h-4" />
+                              <Button variant="outline" size="sm" onClick={() => setViewAssignment(assignment)}>
+                                View Submissions
                               </Button>
                               <Button
                                 variant="outline"
                                 size="sm"
+                                disabled={updateAssignmentStatusMutation.isPending}
                                 onClick={() => updateAssignmentStatusMutation.mutate({
                                   id: assignment.id,
-                                  status: assignment.status === 'active' ? 'due' : 'active'
+                                  status: assignment.status === 'active' ? 'inactive' : 'active'
                                 })}
                               >
-                                Toggle Status
+                                {assignment.status === 'active' ? 'Deactivate' : 'Activate'}
                               </Button>
                             </div>
                           </TableCell>
@@ -484,8 +505,187 @@ export default function TeacherPanel() {
               )}
             </CardContent>
           </Card>
+
+          {/* Student Submissions / Grading */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <GradIcon className="w-5 h-5 mr-2" />
+                Student Submissions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {submissions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No submissions yet</p>
+                  <p className="text-sm">Submissions from your students will appear here to grade</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Student</TableHead>
+                      <TableHead>Assignment</TableHead>
+                      <TableHead>Submission</TableHead>
+                      <TableHead>Grade</TableHead>
+                      <TableHead>Feedback</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {submissions.map((submission) => {
+                      const student = students.find(s => s.id === submission.studentId);
+                      const assignment = assignments.find(a => a.id === submission.assignmentId);
+                      return (
+                        <SubmissionGradeRow
+                          key={submission.id}
+                          submission={submission}
+                          studentName={student ? `${student.firstName} ${student.lastName}` : "Unknown"}
+                          assignmentTitle={assignment?.title || "Unknown"}
+                          totalPoints={assignment?.totalPoints || 100}
+                          saving={gradeSubmissionMutation.isPending}
+                          onSave={(grade, feedback) =>
+                            gradeSubmissionMutation.mutate({ id: submission.id, grade, feedback })
+                          }
+                        />
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </main>
+
+      {/* Per-assignment submissions view (opens when an assignment is clicked) */}
+      <Dialog open={!!viewAssignment} onOpenChange={(o) => { if (!o) setViewAssignment(null); }}>
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Submissions — {viewAssignment?.title}</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            if (!viewAssignment) return null;
+            const subs = submissions.filter(s => s.assignmentId === viewAssignment.id);
+            const submittedCountForAssignment = subs.length;
+            return (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">
+                  {submittedCountForAssignment} student{submittedCountForAssignment === 1 ? "" : "s"} submitted so far.
+                </p>
+                {subs.length === 0 ? (
+                  <div className="text-center py-10 text-gray-500">
+                    <FileText className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No students have submitted this assignment yet.</p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Student</TableHead>
+                        <TableHead>Assignment</TableHead>
+                        <TableHead>Submission</TableHead>
+                        <TableHead>Grade</TableHead>
+                        <TableHead>Feedback</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Action</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {subs.map((submission) => {
+                        const student = students.find(s => s.id === submission.studentId);
+                        return (
+                          <SubmissionGradeRow
+                            key={submission.id}
+                            submission={submission}
+                            studentName={student ? `${student.firstName} ${student.lastName}` : "Unknown"}
+                            assignmentTitle={viewAssignment.title}
+                            totalPoints={viewAssignment.totalPoints || 100}
+                            saving={gradeSubmissionMutation.isPending}
+                            onSave={(grade, feedback) =>
+                              gradeSubmissionMutation.mutate({ id: submission.id, grade, feedback })
+                            }
+                          />
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// One editable grading row (kept as its own component so each row can hold its
+// own draft grade/feedback state).
+function SubmissionGradeRow({
+  submission,
+  studentName,
+  assignmentTitle,
+  totalPoints,
+  onSave,
+  saving,
+}: {
+  submission: AssignmentSubmission;
+  studentName: string;
+  assignmentTitle: string;
+  totalPoints: number;
+  onSave: (grade: number, feedback: string) => void;
+  saving: boolean;
+}) {
+  const [grade, setGrade] = useState<string>(
+    submission.grade !== null && submission.grade !== undefined ? String(submission.grade) : ""
+  );
+  const [feedback, setFeedback] = useState<string>(submission.feedback || "");
+
+  return (
+    <TableRow>
+      <TableCell className="font-medium">{studentName}</TableCell>
+      <TableCell>{assignmentTitle}</TableCell>
+      <TableCell className="max-w-[220px] truncate" title={submission.submissionText || ""}>
+        {submission.submissionText || "-"}
+      </TableCell>
+      <TableCell>
+        <Input
+          type="number"
+          min={0}
+          max={totalPoints}
+          value={grade}
+          onChange={(e) => setGrade(e.target.value)}
+          className="w-20"
+          placeholder={`/ ${totalPoints}`}
+        />
+      </TableCell>
+      <TableCell>
+        <Input
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          placeholder="Feedback"
+          className="w-40"
+        />
+      </TableCell>
+      <TableCell>
+        {submission.status === "graded" ? (
+          <Badge className="bg-purple-100 text-purple-800">Graded</Badge>
+        ) : (
+          <Badge className="bg-blue-100 text-blue-800">Submitted</Badge>
+        )}
+      </TableCell>
+      <TableCell>
+        <Button
+          size="sm"
+          disabled={saving || grade === ""}
+          onClick={() => onSave(Number(grade), feedback)}
+        >
+          <Save className="w-4 h-4 mr-1" /> Save
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }

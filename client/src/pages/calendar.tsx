@@ -60,13 +60,20 @@ export default function Calendar() {
     const month = currentDate.getMonth();
 
     const { data: events = [] } = useQuery<CalendarEvent[]>({
-        queryKey: [`/api/calendar/events?year=${year + 1}&month=${month + 1}`],
+        queryKey: [`/api/calendar/events?year=${year}&month=${month + 1}`],
     });
+
+    // The events query key includes year/month, so invalidate every calendar
+    // query rather than a single fixed key.
+    const invalidateEvents = () =>
+        queryClient.invalidateQueries({
+            predicate: (q) => String(q.queryKey[0]).startsWith("/api/calendar/events"),
+        });
 
     const createMutation = useMutation({
         mutationFn: (data: any) => apiRequest("POST", "/api/calendar/events", data),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/calendar/events"] });
+            invalidateEvents();
             toast({ title: "Event created successfully" });
             setShowEventDialog(false);
             resetForm();
@@ -76,10 +83,24 @@ export default function Calendar() {
         },
     });
 
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string; data: any }) =>
+            apiRequest("PUT", `/api/calendar/events/${id}`, data),
+        onSuccess: () => {
+            invalidateEvents();
+            toast({ title: "Event updated successfully" });
+            setShowEventDialog(false);
+            resetForm();
+        },
+        onError: () => {
+            toast({ title: "Failed to update event", variant: "destructive" });
+        },
+    });
+
     const deleteMutation = useMutation({
         mutationFn: (id: string) => apiRequest("DELETE", `/api/calendar/events/${id}`),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ["/api/calendar/events"] });
+            invalidateEvents();
             toast({ title: "Event deleted successfully" });
         },
         onError: () => {
@@ -121,9 +142,13 @@ export default function Calendar() {
         e.preventDefault();
         const eventData = {
             ...formData,
-            grade: formData.grade ? parseInt(formData.grade) : undefined,
+            grade: formData.grade && formData.grade !== "all" ? parseInt(formData.grade) : undefined,
         };
-        createMutation.mutate(eventData);
+        if (editingEvent) {
+            updateMutation.mutate({ id: editingEvent.id, data: eventData });
+        } else {
+            createMutation.mutate(eventData);
+        }
     };
 
     const getDaysInMonth = () => {
@@ -349,14 +374,14 @@ export default function Calendar() {
                         <div>
                             <Label htmlFor="grade">Grade (optional)</Label>
                             <Select
-                                value={formData.grade}
+                                value={formData.grade || "all"}
                                 onValueChange={(value) => setFormData({ ...formData, grade: value })}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="All grades" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">All grades</SelectItem>
+                                    <SelectItem value="all">All grades</SelectItem>
                                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((g) => (
                                         <SelectItem key={g} value={g.toString()}>
                                             Grade {g}

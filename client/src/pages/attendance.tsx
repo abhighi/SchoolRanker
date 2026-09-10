@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,55 +43,58 @@ export default function AttendancePage() {
     queryKey: ["/api/attendance"],
   });
 
-  // Use filtered endpoint for attendance students - fetches only what's needed
-  const { data: students = [] } = useQuery<Student[]>({
-    queryKey: ["api/attendance/students", selectedGrade || "all", selectedCourse || "all"],
+  // Full (role-scoped) student list used ONLY to resolve names in the records
+  // table — so records never show "Unknown".
+  const { data: nameStudents = [] } = useQuery<Student[]>({
+    queryKey: ["/api/students"],
+  });
+
+  // The bulk-entry roster: the filtered endpoint returns only the students that
+  // belong to the chosen grade/course. Empty params mean "no filter".
+  const attendanceStudentsUrl =
+    `/api/attendance/students?grade=${selectedGrade && selectedGrade !== 'all' ? selectedGrade : ''}` +
+    `&courseId=${selectedCourse || ''}`;
+  const { data: rosterStudents = [] } = useQuery<Student[]>({
+    queryKey: [attendanceStudentsUrl],
   });
 
   const { data: courses = [] } = useQuery<Course[]>({
     queryKey: ["/api/courses"],
   });
 
-  // Initialize student attendance when course is selected
+  // Records-table pagination.
+  const PAGE_SIZE = 25;
+  const [page, setPage] = useState(1);
+
+  // Selecting a course triggers a refetch of the (server-filtered) student list;
+  // the effect below (re)builds the attendance rows from that list.
   const handleCourseSelect = (courseId: string) => {
     setSelectedCourse(courseId);
-    // Get the course to find its grade
-    const course = courses.find(c => c.id === courseId);
-    const grade = course?.grade;
-    
-    // Filter students by grade if course has a grade
-    const filteredStudents = grade 
-      ? students.filter(s => s.grade === grade)
-      : students;
-    
-    // Initialize all filtered students with default status
-    const initialAttendance: StudentAttendance[] = filteredStudents.map(student => ({
-      studentId: student.id,
-      status: "present",
-      remarks: ""
-    }));
-    setStudentAttendance(initialAttendance);
   };
 
-  // Handle grade selection
+  // Handle grade selection — reset the course/list; the student list refetches
+  // for the chosen grade.
   const handleGradeSelect = (grade: string) => {
     setSelectedGrade(grade);
     setSelectedCourse("");
     setStudentAttendance([]);
-    
-    // Filter courses by selected grade
-    if (grade) {
-      // Filter students by grade
-      const gradeNum = parseInt(grade);
-      const filteredStudents = students.filter(s => s.grade === gradeNum);
-      const initialAttendance: StudentAttendance[] = filteredStudents.map(student => ({
-        studentId: student.id,
-        status: "present",
-        remarks: ""
-      }));
-      setStudentAttendance(initialAttendance);
-    }
   };
+
+  // Keep the editable attendance rows in sync with the fetched student list once
+  // a course is selected, preserving any statuses the user already set.
+  useEffect(() => {
+    if (!selectedCourse) {
+      setStudentAttendance([]);
+      return;
+    }
+    setStudentAttendance(prev => {
+      const prevById = new Map(prev.map(sa => [sa.studentId, sa]));
+      return rosterStudents.map(student =>
+        prevById.get(student.id) || { studentId: student.id, status: "present" as const, remarks: "" }
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rosterStudents, selectedCourse]);
 
   // Update single student attendance
   const updateStudentAttendance = (studentId: string, field: keyof StudentAttendance, value: string) => {
@@ -150,38 +153,53 @@ export default function AttendancePage() {
     }
   };
 
-  // Get student and course names
-  const getStudentName = (studentId: string) => {
-    const student = students.find(s => s.id === studentId);
-    return student ? `${student.firstName} ${student.lastName}` : 'Unknown';
-  };
+  // O(1) name lookups via maps (built once per render) — avoids scanning the
+  // whole student/course list for every attendance row.
+  const studentNameById = new Map(
+    nameStudents.map(s => [s.id, `${s.firstName} ${s.lastName}`])
+  );
+  const courseNameById = new Map(courses.map(c => [c.id, c.name]));
+  const getStudentName = (studentId: string) => studentNameById.get(studentId) || 'Unknown';
+  const getCourseName = (courseId: string) => courseNameById.get(courseId) || 'Unknown';
 
-  const getCourseName = (courseId: string) => {
-    const course = courses.find(c => c.id === courseId);
-    return course ? course.name : 'Unknown';
-  };
+  // "all" is the placeholder value for the All-Courses / All-Status options and
+  // means "no filter".
+  const activeCourse = courseFilter && courseFilter !== 'all' ? courseFilter : '';
+  const activeStatus = statusFilter && statusFilter !== 'all' ? statusFilter : '';
+  const anyFilter = !!(searchTerm || activeCourse || activeStatus || dateFilter);
 
-  // Filter attendance based on search and filters
-  const filteredAttendance = attendance.filter(record => {
-    const studentName = getStudentName(record.studentId);
-    const courseName = getCourseName(record.courseId);
-
+  // Filter attendance based on search and filters. When no filter is active we
+  // skip the work entirely (the records table isn't shown until a filter is set).
+  const searchLc = searchTerm.toLowerCase();
+  const filteredAttendance = !anyFilter ? [] : attendance.filter(record => {
     const matchesSearch = !searchTerm ||
-      studentName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      courseName.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesCourse = !courseFilter || record.courseId === courseFilter;
-    const matchesStatus = !statusFilter || record.status === statusFilter;
+      getStudentName(record.studentId).toLowerCase().includes(searchLc) ||
+      getCourseName(record.courseId).toLowerCase().includes(searchLc);
+    const matchesCourse = !activeCourse || record.courseId === activeCourse;
+    const matchesStatus = !activeStatus || record.status === activeStatus;
     const matchesDate = !dateFilter || record.date === dateFilter;
-
     return matchesSearch && matchesCourse && matchesStatus && matchesDate;
   });
 
-  // Calculate attendance statistics
-  const totalRecords = filteredAttendance.length;
-  const presentCount = filteredAttendance.filter(r => r.status === 'present').length;
-  const absentCount = filteredAttendance.filter(r => r.status === 'absent').length;
-  const lateCount = filteredAttendance.filter(r => r.status === 'late').length;
+  // Reset to first page whenever the filters change.
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, courseFilter, statusFilter, dateFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredAttendance.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pagedAttendance = filteredAttendance.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  // Stats reflect the filtered set when a filter is active, otherwise the whole
+  // dataset (so the summary cards are still meaningful before filtering).
+  const statsSource = anyFilter ? filteredAttendance : attendance;
+  const totalRecords = statsSource.length;
+  const presentCount = statsSource.filter(r => r.status === 'present').length;
+  const absentCount = statsSource.filter(r => r.status === 'absent').length;
+  const lateCount = statsSource.filter(r => r.status === 'late').length;
   const attendanceRate = totalRecords > 0 ? (presentCount / totalRecords) * 100 : 0;
 
   return (
@@ -309,7 +327,16 @@ export default function AttendancePage() {
             <CardTitle>Attendance Records</CardTitle>
           </CardHeader>
           <CardContent>
-            {attendanceLoading ? (
+            {!anyFilter ? (
+              <div className="text-center py-12">
+                <Search className="mx-auto h-12 w-12 text-gray-300 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Apply a filter to view records</h3>
+                <p className="text-gray-500">
+                  Choose a course, status or date above, or search by student/course name.
+                  Records stay hidden until a filter is set to keep the page fast.
+                </p>
+              </div>
+            ) : attendanceLoading ? (
               <div className="space-y-4">
                 {[...Array(5)].map((_, i) => (
                   <Skeleton key={i} className="h-16 w-full" />
@@ -352,7 +379,7 @@ export default function AttendancePage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredAttendance.map((record) => (
+                    {pagedAttendance.map((record) => (
                       <tr key={record.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {getStudentName(record.studentId)}
@@ -380,6 +407,23 @@ export default function AttendancePage() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+
+            {filteredAttendance.length > PAGE_SIZE && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filteredAttendance.length)} of {filteredAttendance.length}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>
+                    Previous
+                  </Button>
+                  <span className="text-sm text-gray-600">Page {currentPage} / {totalPages}</span>
+                  <Button variant="outline" size="sm" disabled={currentPage >= totalPages} onClick={() => setPage(currentPage + 1)}>
+                    Next
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
@@ -479,37 +523,6 @@ export default function AttendancePage() {
               </div>
             )}
 
-            {/* Quick Actions */}
-            {studentAttendance.length > 0 && (
-              <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm font-medium">Quick Actions:</span>
-                <Button
-                  variant={selectAllStatus === "present" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => applyToAll("present")}
-                  className="gap-1"
-                >
-                  <CheckCircle className="w-4 h-4" /> All Present
-                </Button>
-                <Button
-                  variant={selectAllStatus === "absent" ? "destructive" : "outline"}
-                  size="sm"
-                  onClick={() => applyToAll("absent")}
-                  className="gap-1"
-                >
-                  <XCircle className="w-4 h-4" /> All Absent
-                </Button>
-                <Button
-                  variant={selectAllStatus === "late" ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={() => applyToAll("late")}
-                  className="gap-1"
-                >
-                  <Clock className="w-4 h-4" /> All Late
-                </Button>
-              </div>
-            )}
-
             {/* Student Attendance List */}
             {studentAttendance.length > 0 && (
               <div>
@@ -524,7 +537,7 @@ export default function AttendancePage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {students.map((student) => {
+                      {rosterStudents.map((student) => {
                         const att = studentAttendance.find(sa => sa.studentId === student.id);
                         return (
                           <tr key={student.id} className="hover:bg-gray-50">

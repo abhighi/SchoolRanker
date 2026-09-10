@@ -11,10 +11,9 @@ import type { UserRole } from "@/hooks/useAuth";
 
 interface LoginFormProps {
   onLogin: (userId: string, role: UserRole, additionalData?: Record<string, any>) => void;
-  onShowSignup: () => void;
 }
 
-export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
+export function LoginForm({ onLogin }: LoginFormProps) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<UserRole>("admin");
@@ -34,6 +33,7 @@ export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
           username: data.username,
           email: data.email,
           profileId: data.profileId,
+          mustChangePassword: data.mustChangePassword,
         });
         toast({ title: `Welcome ${data.username}!`, description: "Login successful" });
       }
@@ -126,13 +126,13 @@ export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
             </div>
 
             <div>
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Email or Username</Label>
               <Input
                 id="username"
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
+                placeholder="Enter your email or username"
                 required
               />
             </div>
@@ -161,17 +161,11 @@ export function LoginForm({ onLogin, onShowSignup }: LoginFormProps) {
           </form>
 
           <div className="mt-4 text-center">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-              Don't have an account?
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Teachers and students: log in with your email and the password your
+              administrator or teacher gave you. You'll set your own password on
+              first login.
             </p>
-            <Button
-              variant="outline"
-              onClick={onShowSignup}
-              className="w-full"
-              data-testid="button-show-signup"
-            >
-              Create Account
-            </Button>
           </div>
         </CardContent>
       </Card>

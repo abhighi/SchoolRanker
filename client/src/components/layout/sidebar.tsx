@@ -7,7 +7,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import {
   GraduationCap, Home, Users, Presentation,
   BookOpen, CalendarCheck, BarChart3, TrendingUp,
-  ChevronLeft, ChevronRight, UserCheck, GraduationCapIcon, LogOut, Calendar, Menu, X
+  ChevronLeft, ChevronRight, UserCheck, GraduationCapIcon, LogOut, Calendar, Menu, X, Megaphone
 } from "lucide-react";
 
 const navigationItems = [
@@ -50,6 +50,11 @@ const navigationItems = [
     name: "Calendar",
     href: "/calendar",
     icon: Calendar,
+  },
+  {
+    name: "Announcements",
+    href: "/announcements",
+    icon: Megaphone,
   },
 ];
 
@@ -207,7 +212,9 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
               { name: "Students", href: "/students", icon: Users },
               { name: "Courses", href: "/courses", icon: BookOpen },
               { name: "Attendance", href: "/attendance", icon: CalendarCheck },
-              { name: "Marks & Rankings", href: "/marks", icon: TrendingUp }
+              { name: "Marks & Rankings", href: "/marks", icon: TrendingUp },
+              { name: "Calendar", href: "/calendar", icon: Calendar },
+              { name: "Announcements", href: "/announcements", icon: Megaphone }
             ].map((item) => {
               const Icon = item.icon;
               const isActive = location === item.href;
@@ -240,18 +247,29 @@ export function Sidebar({ userRole, userId }: SidebarProps) {
                 </h3>
               </div>
             )}
-            <Link href="/student-panel">
-              <div
-                className={cn(
-                  "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
-                  location === "/student-panel" && "bg-primary text-white hover:bg-blue-600 hover:text-white",
-                  isCollapsed ? "justify-center" : "space-x-3"
-                )}
-              >
-                <GraduationCapIcon className="w-5 h-5 text-current flex-shrink-0" />
-                {!isCollapsed && <span>Student Panel</span>}
-              </div>
-            </Link>
+            {[
+              { name: "Student Panel", href: "/student-panel", icon: GraduationCapIcon },
+              { name: "Calendar", href: "/calendar", icon: Calendar },
+              { name: "Announcements", href: "/announcements", icon: Megaphone }
+            ].map((item) => {
+              const Icon = item.icon;
+              const isActive = location === item.href;
+
+              return (
+                <Link key={item.href} href={item.href}>
+                  <div
+                    className={cn(
+                      "flex items-center px-3 py-3 text-gray-600 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors cursor-pointer",
+                      isActive && "bg-primary text-white hover:bg-blue-600 hover:text-white",
+                      isCollapsed ? "justify-center" : "space-x-3"
+                    )}
+                  >
+                    <Icon className="w-5 h-5 text-current flex-shrink-0" />
+                    {!isCollapsed && <span>{item.name}</span>}
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         )}
 

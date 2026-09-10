@@ -1,0 +1,423 @@
+<title>SchoolRanker Overhaul Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --ground:#f5f6fa; --panel:#ffffff; --panel-2:#eef0f7;
+    --ink:#1b2130; --ink-soft:#54607a; --ink-faint:#8791a7;
+    --line:#e2e5ef; --line-strong:#cfd4e4;
+    --accent:#4f46e5; --accent-soft:#eae8fd;
+    --good:#15803d; --good-bg:#e7f4 ec; --good-bg:#e7f4ec;
+    --warn:#b45309; --warn-bg:#fbefd9;
+    --bad:#c02626; --bad-bg:#f9e3e3;
+    --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:'IBM Plex Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    --display:'Fraunces','IBM Plex Sans',Georgia,serif;
+  }
+  :root:not([data-theme="light"]){
+    @media (prefers-color-scheme: dark){
+      --ground:#0e1220; --panel:#161c2c; --panel-2:#1d2437;
+      --ink:#e7eaf3; --ink-soft:#a7b0c6; --ink-faint:#6f7a94;
+      --line:#26304a; --line-strong:#34405f;
+      --accent:#a5b4fc; --accent-soft:#232a44;
+      --good:#6ee7a0; --good-bg:#123023;
+      --warn:#f5c274; --warn-bg:#33260f;
+      --bad:#f4a2a2; --bad-bg:#331717;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0e1220; --panel:#161c2c; --panel-2:#1d2437;
+    --ink:#e7eaf3; --ink-soft:#a7b0c6; --ink-faint:#6f7a94;
+    --line:#26304a; --line-strong:#34405f;
+    --accent:#a5b4fc; --accent-soft:#232a44;
+    --good:#6ee7a0; --good-bg:#123023;
+    --warn:#f5c274; --warn-bg:#33260f;
+    --bad:#f4a2a2; --bad-bg:#331717;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+    line-height:1.6;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding-inline:20px;padding-block:0}
+  a{color:var(--accent)}
+  code,.mono{font-family:var(--mono);font-size:.88em}
+  h1,h2,h3{text-wrap:balance;line-height:1.15;margin:0}
+
+  /* Header */
+  header.masthead{border-bottom:1px solid var(--line);margin-bottom:40px}
+  .masthead .wrap{padding-block:52px 40px}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 18px}
+  h1{font-family:var(--display);font-weight:600;font-size:clamp(2.3rem,6vw,3.5rem);
+    letter-spacing:-.01em}
+  .lede{color:var(--ink-soft);font-size:1.1rem;max-width:60ch;margin:18px 0 0}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 10px;margin-top:26px}
+  .meta span{font-family:var(--mono);font-size:.74rem;color:var(--ink-soft);
+    background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    padding:5px 12px}
+
+  section{margin-bottom:52px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:8px;
+    border-bottom:2px solid var(--ink);padding-bottom:10px}
+  .sec-num{font-family:var(--mono);font-size:.8rem;color:var(--ink-faint)}
+  h2{font-family:var(--display);font-weight:600;font-size:1.7rem;letter-spacing:-.01em}
+  .sec-note{color:var(--ink-soft);margin:14px 0 22px;max-width:64ch}
+
+  /* Phase legend */
+  .legend{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    gap:10px;margin-top:24px}
+  .legend div{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:12px 14px}
+  .legend b{font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--accent);display:block;margin-bottom:3px}
+  .legend p{margin:0;font-size:.86rem;color:var(--ink-soft)}
+
+  /* Before / after change block */
+  .change{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    overflow:hidden;margin-bottom:16px}
+  .change > h3{font-family:var(--sans);font-weight:600;font-size:1.02rem;
+    padding:16px 20px 4px;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+  .tag{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;
+    padding:3px 8px;border-radius:6px;font-weight:500}
+  .tag.p{background:var(--accent-soft);color:var(--accent)}
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);
+    margin-top:12px}
+  .ba > div{background:var(--panel);padding:14px 20px 18px}
+  .ba .k{font-family:var(--mono);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase;
+    display:flex;align-items:center;gap:7px;margin-bottom:7px}
+  .ba .k::before{content:"";width:9px;height:9px;border-radius:50%;flex:none}
+  .ba .was .k{color:var(--bad)} .ba .was .k::before{background:var(--bad)}
+  .ba .now .k{color:var(--good)} .ba .now .k::before{background:var(--good)}
+  .ba p{margin:0;font-size:.92rem;color:var(--ink)}
+  .ba .was p{color:var(--ink-soft)}
+  @media(max-width:560px){.ba{grid-template-columns:1fr}}
+
+  /* Bug ledger */
+  .bugs{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .bug{display:grid;grid-template-columns:44px 1fr;gap:0;border-top:1px solid var(--line)}
+  .bug:first-child{border-top:none}
+  .bug .id{font-family:var(--mono);font-size:.8rem;color:var(--ink-faint);
+    background:var(--panel-2);padding:14px 0;text-align:center;font-variant-numeric:tabular-nums}
+  .bug .body{background:var(--panel);padding:13px 18px}
+  .bug .body b{font-weight:600}
+  .bug .body .file{font-family:var(--mono);font-size:.76rem;color:var(--accent);
+    display:inline-block;margin-top:3px}
+  .sev{font-family:var(--mono);font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;
+    padding:2px 7px;border-radius:5px;margin-left:8px;vertical-align:middle}
+  .sev.crit{background:var(--bad-bg);color:var(--bad)}
+  .sev.high{background:var(--warn-bg);color:var(--warn)}
+  .sev.med{background:var(--panel-2);color:var(--ink-soft)}
+
+  /* Test plan */
+  .role{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:6px 22px 18px;margin-bottom:18px}
+  .role h3{font-family:var(--display);font-weight:600;font-size:1.25rem;
+    padding-top:16px;display:flex;align-items:center;gap:10px}
+  .role h3 .chip{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;
+    text-transform:uppercase;background:var(--accent-soft);color:var(--accent);
+    padding:3px 9px;border-radius:6px}
+  ol.steps{margin:14px 0 0;padding:0;list-style:none;counter-reset:s}
+  ol.steps li{counter-increment:s;position:relative;padding:9px 0 9px 40px;
+    border-top:1px dashed var(--line);font-size:.94rem}
+  ol.steps li:first-child{border-top:none}
+  ol.steps li::before{content:counter(s);position:absolute;left:0;top:9px;
+    width:26px;height:26px;border-radius:8px;background:var(--panel-2);
+    color:var(--accent);font-family:var(--mono);font-size:.8rem;font-weight:500;
+    display:flex;align-items:center;justify-content:center}
+  .expect{display:block;margin-top:3px;color:var(--good);font-size:.85rem}
+  .expect::before{content:"→ expect  ";font-family:var(--mono);font-size:.72rem;
+    letter-spacing:.06em;color:var(--ink-faint)}
+
+  /* Callout / commands */
+  .call{background:var(--accent-soft);border:1px solid var(--line-strong);
+    border-radius:14px;padding:18px 22px;margin:22px 0}
+  .call h3{font-size:1rem;margin-bottom:8px}
+  pre{background:var(--ink);color:#e7eaf3;border-radius:10px;padding:14px 16px;
+    overflow-x:auto;margin:10px 0 0;font-family:var(--mono);font-size:.82rem;line-height:1.7}
+  :root[data-theme="dark"] pre, :root:not([data-theme="light"]) pre{border:1px solid var(--line)}
+  @media (prefers-color-scheme: dark){pre{background:#05070d}}
+  .kv{font-family:var(--mono);font-size:.82rem;color:var(--ink-soft)}
+  .kv b{color:var(--ink)}
+
+  ul.plain{margin:10px 0 0;padding-left:20px}
+  ul.plain li{margin:5px 0;font-size:.93rem}
+  .rule{height:1px;background:var(--line);border:none;margin:0}
+  footer{border-top:1px solid var(--line);margin-top:24px}
+  footer .wrap{padding-block:26px 46px;color:var(--ink-faint);font-size:.82rem}
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">Pathshala Saathi · Engineering Ledger</p>
+    <h1>The SchoolRanker Overhaul</h1>
+    <p class="lede">Everything that changed taking the school-management system from a partly-working prototype to a complete, end-to-end app — the fixes, the new features, and exactly how to test each one.</p>
+    <div class="meta">
+      <span>Phases 1–8</span>
+      <span>React · Express · PostgreSQL · Drizzle</span>
+      <span>18 files changed</span>
+      <span>2 new files</span>
+      <span>25+ bugs fixed</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <!-- APPLY -->
+  <section>
+    <div class="sec-head"><span class="sec-num">00</span><h2>Apply &amp; run</h2></div>
+    <p class="sec-note">One database migration was needed (Phase 1 added a column). After that, every change loads with a server restart. Run these once from <code>D:\SchoolRanker</code>.</p>
+    <div class="call">
+      <h3>Bring the app up to date</h3>
+      <pre>docker start pathshala-db        <span style="color:#8791a7"># ensure the DB is running (port 5433)</span>
+npm run db:push                 <span style="color:#8791a7"># adds users.must_change_password</span>
+npm run dev                     <span style="color:#8791a7"># restart to load all backend changes</span></pre>
+      <p style="margin:14px 0 0" class="kv">Demo logins still work &mdash; <b>admin / admin123</b>, teacher <b>ram_teacher / teacher123</b>, student <b>STU-0001 / student123</b>. New accounts you create use the default password <b>changeme123</b> and are forced to change it on first login.</p>
+    </div>
+  </section>
+
+  <!-- LEGEND -->
+  <section>
+    <div class="sec-head"><span class="sec-num">01</span><h2>The eight phases</h2></div>
+    <p class="sec-note">Each change below is tagged with the phase it landed in. Phase 0 was skipped at your request; the work ran 1 through 8.</p>
+    <div class="legend">
+      <div><b>Phase 1</b><p>Authentication overhaul — email login &amp; accounts</p></div>
+      <div><b>Phase 2</b><p>Admin panel &amp; simplified forms</p></div>
+      <div><b>Phase 3</b><p>Teacher panel &amp; grading</p></div>
+      <div><b>Phase 4</b><p>Student panel</p></div>
+      <div><b>Phase 5</b><p>Attendance · Calendar · Notifications</p></div>
+      <div><b>Phase 6</b><p>Algorithms — Binary Search &amp; QuickSort</p></div>
+      <div><b>Phase 7</b><p>Backend security hardening</p></div>
+      <div><b>Phase 8</b><p>QA sweep — all files verified</p></div>
+    </div>
+  </section>
+
+  <!-- FEATURES BEFORE/AFTER -->
+  <section>
+    <div class="sec-head"><span class="sec-num">02</span><h2>What changed — before &amp; after</h2></div>
+    <p class="sec-note">The substance of the overhaul, grouped by area. The left of each row is how it behaved when we started; the right is how it behaves now.</p>
+
+    <div class="change">
+      <h3>Teacher &amp; student login by email <span class="tag p">Phase 1</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>Adding a teacher or student created only a profile row — <b>no login account at all</b>. Those people could never sign in. Login accepted a username only, never an email.</p></div>
+        <div class="now"><div class="k">After</div><p>Adding a teacher (by admin) or student (by teacher) <b>auto-creates a login account</b> from the email entered. Users sign in with that <b>email or a username</b>, and the created account shows its login + password in a toast.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Forced first-login password change <span class="tag p">Phase 1</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>No concept of temporary passwords or first-login setup existed.</p></div>
+        <div class="now"><div class="k">After</div><p>New accounts get the default password <code>changeme123</code> and are taken to a <b>“Set a new password”</b> screen on first login before they can use the app.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Self-signup <span class="tag p">Phase 1</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>A public “Create Account” page existed but was <b>broken</b> (it required a username the form never sent) and contradicted its own “admin-added only” note.</p></div>
+        <div class="now"><div class="k">After</div><p>Self-signup is <b>removed entirely</b>. Accounts exist only when an admin adds a teacher or a teacher adds a student — matching the intended model.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Add Student / Add Teacher forms <span class="tag p">Phase 2</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>~13 fields each, including a <b>manually typed ID</b>, dates, guardian details, salary, etc. Editing didn’t pre-fill reliably.</p></div>
+        <div class="now"><div class="k">After</div><p>Trimmed to essentials — <b>Student:</b> name, email, grade, section; <b>Teacher:</b> name, email, subject. IDs, dates and status are generated server-side. Forms re-initialise correctly on open.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Who creates whom <span class="tag p">Phase 2</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>Only admins could create students; teachers saw an Edit button that the backend rejected with a 403.</p></div>
+        <div class="now"><div class="k">After</div><p><b>Teachers create students</b> (admins do not); <b>admins create teachers</b>. Add/Edit/Delete buttons now match what each role is actually allowed to do.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Teacher assignments <span class="tag p">Phase 3</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>Creating a “Quiz” failed validation. “Toggle Status” called a non-existent endpoint with an invalid status, so it always errored.</p></div>
+        <div class="now"><div class="k">After</div><p>Assignment types include <b>quiz &amp; test</b>; the button now <b>Activates / Deactivates</b> reliably. Teachers can only create assignments for their own courses.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Grading submissions <span class="tag p">Phase 3</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>No grading UI existed, and a backend bug meant teachers saw <b>zero submissions</b> — grading was impossible.</p></div>
+        <div class="now"><div class="k">After</div><p>A <b>Student Submissions</b> section lets teachers enter a grade + feedback and Save. It records who graded it and when, and marks the work <b>Graded</b>.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Student “My Teachers” &amp; class rank <span class="tag p">Phase 4</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>“My Teachers” was requested with the wrong ID (always empty) and <b>never shown on the page</b>. Class Rank was permanently “N/A”.</p></div>
+        <div class="now"><div class="k">After</div><p>A <b>My Teachers</b> card lists the teachers of the student’s enrolled courses, and <b>real class rank</b> is computed with QuickSort.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Attendance bulk entry <span class="tag p">Phase 5</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>The student list <b>never loaded</b> (malformed request), “All Grades” broke it, and the Quick-Actions bar was duplicated.</p></div>
+        <div class="now"><div class="k">After</div><p>Pick a grade &amp; course → the enrolled students load; <b>All Present / Absent / Late</b> work; one clean action bar; the list stays in sync with the chosen course.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Calendar <span class="tag p">Phase 5</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>Showed the wrong year, editing an event <b>created a duplicate</b>, “All grades” crashed the picker, the grid didn’t refresh, and teacher/student filtering used the wrong ID.</p></div>
+        <div class="now"><div class="k">After</div><p>Correct month/year, <b>edit updates in place</b>, the picker works, the grid refreshes immediately, and each role sees the right events (teachers can create grade-scoped ones).</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Notifications <span class="tag p">Phase 5</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>The 🔔 bell existed but <b>nothing ever created a notification</b>, so it was always empty.</p></div>
+        <div class="now"><div class="k">After</div><p>Real notifications fire: enrolled students are notified when a <b>new assignment is posted</b>, and a student is notified when their work is <b>graded</b>.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Algorithms on show <span class="tag p">Phase 6</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>QuickSort powered rankings but wasn’t obvious, and there was no dedicated search algorithm — lookups were plain linear filters.</p></div>
+        <div class="now"><div class="k">After</div><p>A hand-written <b>Binary Search</b> (O(log n)) powers “Quick Lookup by Student ID” and reports the comparison count; <b>QuickSort</b> is labelled on rankings; MergeSort stays as a documented alternative.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Backend access control <span class="tag p">Phase 7</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>List endpoints (marks, attendance, enrolments) returned <b>everyone’s data</b> to any logged-in user; teachers could write marks/attendance for <b>any</b> course.</p></div>
+        <div class="now"><div class="k">After</div><p>Lists are <b>role-scoped</b> (teacher → own courses, student → own records); teacher writes are restricted to their own courses; duplicate errors read as friendly messages.</p></div>
+      </div>
+    </div>
+
+    <div class="change">
+      <h3>Verification <span class="tag p">Phase 8</span></h3>
+      <div class="ba">
+        <div class="was"><div class="k">Before</div><p>Changes were spread across many files with no consolidated check.</p></div>
+        <div class="now"><div class="k">After</div><p>All <b>17 changed source files pass a clean syntax check</b>; the full manual test plan below covers every new behaviour.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUGS -->
+  <section>
+    <div class="sec-head"><span class="sec-num">03</span><h2>Bugs fixed</h2></div>
+    <p class="sec-note">The concrete defects resolved across phases 1–8, with the file each lived in. Severity: <span class="sev crit">crit</span> blocks a core flow · <span class="sev high">high</span> · <span class="sev med">med</span>.</p>
+    <div class="bugs">
+      <div class="bug"><div class="id">01</div><div class="body"><b>Adding a teacher/student created no login account</b> <span class="sev crit">crit</span> — those users could never log in.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">02</div><div class="body"><b>Login accepted username only</b> <span class="sev crit">crit</span> — email-based teacher/student login was impossible.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">03</div><div class="body"><b>Signup always failed</b> <span class="sev high">high</span> — the form never sent the username the schema required (now removed entirely).<span class="file">routes.ts · signup-form.tsx</span></div></div>
+      <div class="bug"><div class="id">04</div><div class="body"><b>Attendance bulk list never loaded</b> <span class="sev crit">crit</span> — the request URL was malformed (path segments instead of query params).<span class="file">client/…/attendance.tsx</span></div></div>
+      <div class="bug"><div class="id">05</div><div class="body"><b>Attendance “All Grades” produced NaN</b> <span class="sev high">high</span> — no students loaded.<span class="file">client/…/attendance.tsx</span></div></div>
+      <div class="bug"><div class="id">06</div><div class="body"><b>Duplicate “Quick Actions” block</b> <span class="sev med">med</span> rendered twice on the attendance dialog.<span class="file">client/…/attendance.tsx</span></div></div>
+      <div class="bug"><div class="id">07</div><div class="body"><b>Assignment “Toggle Status” hit a missing PATCH endpoint</b> <span class="sev high">high</span> with an invalid status → always 404.<span class="file">teacher-panel.tsx · routes.ts</span></div></div>
+      <div class="bug"><div class="id">08</div><div class="body"><b>Creating a “Quiz” assignment failed validation</b> <span class="sev high">high</span> — the type wasn’t in the allowed set.<span class="file">shared/schema.ts</span></div></div>
+      <div class="bug"><div class="id">09</div><div class="body"><b>Teachers saw zero submissions</b> <span class="sev crit">crit</span> — the filter compared an assignment ID against course IDs, so grading was impossible.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">10</div><div class="body"><b>Student “My Teachers” always empty</b> <span class="sev high">high</span> — queried with the login ID instead of the profile ID, and was never rendered.<span class="file">student-panel.tsx · routes.ts</span></div></div>
+      <div class="bug"><div class="id">11</div><div class="body"><b>Class rank always “N/A”</b> <span class="sev med">med</span> — rank was never computed.<span class="file">student-panel.tsx</span></div></div>
+      <div class="bug"><div class="id">12</div><div class="body"><b>Calendar fetched the wrong year</b> <span class="sev high">high</span> (off-by-one) → events didn’t appear.<span class="file">client/…/calendar.tsx</span></div></div>
+      <div class="bug"><div class="id">13</div><div class="body"><b>Editing a calendar event created a duplicate</b> <span class="sev high">high</span> — it always called create, never update.<span class="file">client/…/calendar.tsx</span></div></div>
+      <div class="bug"><div class="id">14</div><div class="body"><b>Calendar “All grades” used an empty select value</b> <span class="sev high">high</span> that crashes the component.<span class="file">client/…/calendar.tsx</span></div></div>
+      <div class="bug"><div class="id">15</div><div class="body"><b>Calendar grid didn’t refresh</b> <span class="sev med">med</span> after create/edit/delete.<span class="file">client/…/calendar.tsx</span></div></div>
+      <div class="bug"><div class="id">16</div><div class="body"><b>Calendar role filtering used the wrong ID</b> <span class="sev high">high</span> — teachers couldn’t create events; role filtering didn’t match.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">17</div><div class="body"><b>Notifications were never generated</b> <span class="sev high">high</span> — the bell was permanently empty.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">18</div><div class="body"><b>Teacher saw an Edit button the backend rejected</b> <span class="sev med">med</span> (403) — RBAC mismatch on Students.<span class="file">students.tsx · routes.ts</span></div></div>
+      <div class="bug"><div class="id">19</div><div class="body"><b>Course “unassigned teacher” sent an empty string</b> <span class="sev med">med</span> — invalid foreign key; now stored as null.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">20</div><div class="body"><b>List endpoints leaked all data to every role</b> <span class="sev high">high</span> — marks, attendance and enrolments are now role-scoped.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">21</div><div class="body"><b>Teachers could write to any course’s marks/attendance</b> <span class="sev high">high</span> — now restricted to their own courses.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">22</div><div class="body"><b>Manual, error-prone student/teacher IDs</b> <span class="sev med">med</span> — now auto-generated (e.g. <code>STU-0301</code>, <code>TCH-0011</code>).<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">23</div><div class="body"><b>Duplicate email/ID surfaced as a raw 500</b> <span class="sev med">med</span> — now a clear “already exists” message.<span class="file">server/routes.ts</span></div></div>
+      <div class="bug"><div class="id">24</div><div class="body"><b>Dead “eye” / view buttons</b> <span class="sev med">med</span> on the teacher panel were removed.<span class="file">teacher-panel.tsx</span></div></div>
+      <div class="bug"><div class="id">25</div><div class="body"><b>Login field mislabelled</b> <span class="sev med">med</span> — now reads “Email or Username” to match the new login.<span class="file">login-form.tsx</span></div></div>
+    </div>
+  </section>
+
+  <!-- NEW FEATURES -->
+  <section>
+    <div class="sec-head"><span class="sec-num">04</span><h2>New features added</h2></div>
+    <p class="sec-note">Capabilities that did not exist before this work, distinct from bug fixes.</p>
+    <ul class="plain">
+      <li><b>Email-based accounts</b> auto-provisioned when an admin adds a teacher or a teacher adds a student.</li>
+      <li><b>Forced first-login password change</b> flow with its own screen.</li>
+      <li><b>Simplified add-student and add-teacher forms</b> with server-generated IDs and defaults.</li>
+      <li><b>Teacher grading workspace</b> — view student submissions, enter grade + feedback, save.</li>
+      <li><b>Student “My Teachers” directory</b> and a live <b>class rank</b>.</li>
+      <li><b>Working attendance bulk entry</b> with All-Present/Absent/Late shortcuts.</li>
+      <li><b>Editable calendar</b> with role-aware event visibility.</li>
+      <li><b>In-app notifications</b> for new assignments and grades.</li>
+      <li><b>Binary Search “Quick Lookup by Student ID”</b> with a live comparison count, plus labelled QuickSort rankings — the educational algorithm showcase.</li>
+      <li><b>Role-scoped, ownership-checked API</b> — the security layer that makes the three panels genuinely separate.</li>
+    </ul>
+  </section>
+
+  <!-- TEST PLAN -->
+  <section>
+    <div class="sec-head"><span class="sec-num">05</span><h2>Detailed test plan</h2></div>
+    <p class="sec-note">Run these in order after <code>npm run db:push</code> and a restart. Use a private/incognito window (or log out between roles) so sessions don’t overlap.</p>
+
+    <div class="role">
+      <h3><span class="chip">Admin</span> admin / admin123</h3>
+      <ol class="steps">
+        <li>Log in as <code>admin</code>. <span class="expect">the Dashboard opens; its top button says <b>Add Teacher</b> (no “Add Student”).</span></li>
+        <li>Open <b>Teachers → Add New Teacher</b>. Enter first/last name, a real email (e.g. <code>tara.k@school.edu</code>) and a subject; Save. <span class="expect">a toast shows <code>Login: tara.k@school.edu / changeme123</code>; the teacher appears with an auto ID like <code>TCH-0011</code>.</span></li>
+        <li>Confirm there is <b>no way to add a student as admin</b> (no Add button on Students). <span class="expect">admin can view/manage but not create students.</span></li>
+        <li>Try adding a second teacher with the <b>same email</b>. <span class="expect">a friendly “an account with this email already exists” message, not a crash.</span></li>
+        <li>Go to <b>Courses</b>, create a course and leave the teacher unassigned. <span class="expect">it saves (no foreign-key error) and shows “Unassigned”.</span></li>
+      </ol>
+    </div>
+
+    <div class="role">
+      <h3><span class="chip">Teacher</span> the email you just created</h3>
+      <ol class="steps">
+        <li>Log out, then log in with the <b>new teacher’s email</b> and <code>changeme123</code>. <span class="expect">you land on the <b>Set a new password</b> screen.</span></li>
+        <li>Set a new password (≥ 6 chars, both fields matching). <span class="expect">you proceed into the Teacher Panel; next login uses the new password.</span></li>
+        <li>Also confirm the seeded teacher works: log in as <code>ram_teacher / teacher123</code> (no forced change — existing account).</li>
+        <li>In the Teacher Panel, <b>Create Assignment</b> for one of your courses, type <b>Quiz</b>. <span class="expect">it saves successfully (no validation error).</span></li>
+        <li>On that assignment, click <b>Deactivate</b>, then <b>Activate</b>. <span class="expect">the status flips each time with no error.</span></li>
+        <li>Go to <b>Students → Add New Student</b>, enter name, email, grade, section; Save. <span class="expect">toast shows the student’s login + <code>changeme123</code>; auto ID like <code>STU-0301</code>.</span></li>
+        <li>Open <b>Attendance → Mark Attendance</b>: choose a grade, then a course. <span class="expect">the enrolled students list appears; <b>All Present/Absent/Late</b> set every row; <b>Save</b> records them.</span></li>
+        <li>After a student submits (below), open the <b>Student Submissions</b> card, enter a grade + feedback, click <b>Save</b>. <span class="expect">the row flips to <b>Graded</b>.</span></li>
+      </ol>
+    </div>
+
+    <div class="role">
+      <h3><span class="chip">Student</span> STU-0001 / student123</h3>
+      <ol class="steps">
+        <li>Log in as a seeded student in one of the test teacher’s courses (e.g. <code>STU-0001</code>). <span class="expect">the Student Panel shows a numeric <b>Class Rank</b> (not “N/A”) and a <b>My Teachers</b> card listing that course’s teacher(s) with email.</span></li>
+        <li>Open an assignment and <b>Submit</b> some text. <span class="expect">it moves to “Submitted”; the teacher can now grade it (step above).</span></li>
+        <li>After the teacher grades it, refresh the panel. <span class="expect">the submission shows the grade, and the 🔔 bell shows an <b>“Assignment graded”</b> notification.</span></li>
+        <li>When the teacher posts a new assignment to your course, check the bell. <span class="expect">a <b>“New assignment posted”</b> notification appears.</span></li>
+      </ol>
+    </div>
+
+    <div class="role">
+      <h3><span class="chip">Cross-cutting</span> algorithms, calendar, security</h3>
+      <ol class="steps">
+        <li><b>Binary Search:</b> as admin/teacher on <b>Students</b>, use “Quick Lookup by Student ID” with a real ID like <code>STU-0001</code>. <span class="expect">it finds the student and shows a badge like “Found in 4 comparisons”; a bad ID (<code>STU-9999</code>) reports not found with the count.</span></li>
+        <li><b>QuickSort:</b> open <b>Marks &amp; Rankings</b>. <span class="expect">the rankings table carries a “Ranked with QuickSort algorithm” label.</span></li>
+        <li><b>Calendar edit:</b> add an event, then click it and change the title; Save. <span class="expect">it updates in place — no duplicate — and the grid refreshes.</span></li>
+        <li><b>Calendar “All grades”:</b> open the event dialog’s grade dropdown and choose “All grades”. <span class="expect">the picker works (no crash) and the event is created as a global event.</span></li>
+        <li><b>Isolation:</b> while logged in as a teacher, confirm you see only your own courses’ students, marks and attendance — not the whole school.</li>
+      </ol>
+    </div>
+  </section>
+
+  <hr class="rule">
+</div>
+
+<footer>
+  <div class="wrap">
+    Pathshala Saathi / SchoolRanker · phases 1–8 change ledger &amp; test plan. Default new-account password is <code>changeme123</code> (changed on first login). Database on port <code>5433</code>.
+  </div>
+</footer>

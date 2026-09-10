@@ -9,6 +9,7 @@ export interface User {
   email?: string;
   username?: string;
   profileId?: string;
+  mustChangePassword?: boolean;
 }
 
 export function useAuth() {
@@ -30,8 +31,8 @@ export function useAuth() {
             const response = await apiRequest('GET', '/api/auth/me');
             if (response.ok) {
               const data = await response.json();
-              // Update user with server-confirmed role and profileId
-              setUser(prev => prev ? { ...prev, role: data.role, id: data.id, profileId: data.profileId } : null);
+              // Update user with server-confirmed role, profileId and password flag
+              setUser(prev => prev ? { ...prev, role: data.role, id: data.id, profileId: data.profileId, mustChangePassword: data.mustChangePassword } : null);
             } else {
               // Session invalid - clear localStorage
               localStorage.removeItem('currentUser');
@@ -62,6 +63,16 @@ export function useAuth() {
     localStorage.setItem('currentUser', JSON.stringify(userData));
   }, []);
 
+  // Called after the user completes the forced first-login password change.
+  const markPasswordChanged = useCallback(() => {
+    setUser(prev => {
+      if (!prev) return null;
+      const updated = { ...prev, mustChangePassword: false };
+      localStorage.setItem('currentUser', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiRequest('POST', '/api/auth/logout');
@@ -79,5 +90,6 @@ export function useAuth() {
     isAuthenticated: !!user,
     login,
     logout,
+    markPasswordChanged,
   };
 }

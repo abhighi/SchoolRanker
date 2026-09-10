@@ -280,7 +280,10 @@ export default function Marks() {
         {/* Full Rankings Table */}
         <Card>
           <CardHeader>
-            <CardTitle>Complete Class Rankings</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Complete Class Rankings</span>
+              <span className="text-xs font-normal text-gray-500">Ranked with QuickSort algorithm</span>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {studentsLoading ? (

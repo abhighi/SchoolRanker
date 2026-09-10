@@ -1,12 +1,11 @@
 import { Switch, Route, useLocation } from "wouter";
-import { useState } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Sidebar } from "@/components/layout/sidebar";
 import { LoginForm } from "@/components/auth/login-form";
-import { SignupForm } from "@/components/auth/signup-form";
+import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { useAuth, type UserRole } from "@/hooks/useAuth";
 import Dashboard from "@/pages/dashboard";
 import Students from "@/pages/students";
@@ -19,6 +18,7 @@ import TeacherPanel from "@/pages/teacher-panel";
 import StudentPanel from "@/pages/student-panel";
 import NotFound from "@/pages/not-found";
 import Calendar from "@/pages/calendar";
+import Announcements from "@/pages/announcements";
 
 interface RouterProps {
   userRole: UserRole;
@@ -37,19 +37,11 @@ function Router({ userRole, userId }: RouterProps) {
     }
   };
 
-  // Redirect to appropriate dashboard on login
-  if (location === '/login' || location === '/') {
-    const defaultRoute = getDefaultRoute(userRole);
-    if (location !== defaultRoute) {
-      setLocation(defaultRoute);
-    }
-  }
-
   // Access control based on role
   const hasAccess = (path: string, role: UserRole): boolean => {
-    const adminPaths = ['/', '/students', '/teachers', '/courses', '/attendance', '/marks', '/analytics', '/calendar'];
-    const teacherPaths = ['/teacher-panel', '/students', '/courses', '/attendance', '/marks', '/calendar'];
-    const studentPaths = ['/student-panel', '/calendar'];
+    const adminPaths = ['/', '/students', '/teachers', '/courses', '/attendance', '/marks', '/analytics', '/calendar', '/announcements'];
+    const teacherPaths = ['/teacher-panel', '/students', '/courses', '/attendance', '/marks', '/calendar', '/announcements'];
+    const studentPaths = ['/student-panel', '/calendar', '/announcements'];
 
     switch (role) {
       case 'admin': return adminPaths.includes(path) || teacherPaths.includes(path) || studentPaths.includes(path);
@@ -58,6 +50,16 @@ function Router({ userRole, userId }: RouterProps) {
       default: return false;
     }
   };
+
+  // Redirect to the role's home whenever the current URL isn't one this role can
+  // open. This covers first login AND stale URLs left over from a previous role
+  // (e.g. a teacher landing on /teachers, or a student on /students).
+  const defaultRoute = getDefaultRoute(userRole);
+  if (location === '/login' || !hasAccess(location, userRole)) {
+    if (location !== defaultRoute) {
+      setLocation(defaultRoute);
+    }
+  }
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -75,6 +77,7 @@ function Router({ userRole, userId }: RouterProps) {
               <Route path="/marks" component={Marks} />
               <Route path="/analytics" component={Analytics} />
               <Route path="/calendar" component={Calendar} />
+              <Route path="/announcements" component={Announcements} />
             </>
           )}
 
@@ -89,6 +92,7 @@ function Router({ userRole, userId }: RouterProps) {
                   <Route path="/attendance" component={Attendance} />
                   <Route path="/marks" component={Marks} />
                   <Route path="/calendar" component={Calendar} />
+                  <Route path="/announcements" component={Announcements} />
                 </>
               )}
             </>
@@ -99,6 +103,7 @@ function Router({ userRole, userId }: RouterProps) {
             <>
               <Route path="/student-panel" component={StudentPanel} />
               <Route path="/calendar" component={Calendar} />
+              <Route path="/announcements" component={Announcements} />
             </>
           )}
 
@@ -110,8 +115,7 @@ function Router({ userRole, userId }: RouterProps) {
 }
 
 function App() {
-  const { user, isLoading, login } = useAuth();
-  const [showSignup, setShowSignup] = useState(false);
+  const { user, isLoading, login, logout, markPasswordChanged } = useAuth();
 
   if (isLoading) {
     return (
@@ -129,17 +133,9 @@ function App() {
       <TooltipProvider>
         <Toaster />
         {!user ? (
-          showSignup ? (
-            <SignupForm
-              onSignup={login}
-              onBackToLogin={() => setShowSignup(false)}
-            />
-          ) : (
-            <LoginForm
-              onLogin={login}
-              onShowSignup={() => setShowSignup(true)}
-            />
-          )
+          <LoginForm onLogin={login} />
+        ) : user.mustChangePassword ? (
+          <ChangePasswordForm onChanged={markPasswordChanged} onLogout={logout} />
         ) : (
           <Router userRole={user.role} userId={user.id} />
         )}

@@ -34,24 +34,29 @@ if (config.isProduction) {
   app.set('trust proxy', 1);
 }
 
-// Rate limiting for auth endpoints
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // 20 attempts per window
-  message: { message: 'Too many login attempts, please try again later.' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/auth', authLimiter);
+// Rate limiting is applied in PRODUCTION only — during local development/demo
+// the constant page navigation and repeated logins would otherwise trip a 429.
+if (config.isProduction) {
+  // Strict limiter for the LOGIN endpoint only (not /api/auth/me, which fires
+  // on every page load).
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 50,
+    message: { message: 'Too many login attempts, please try again later.' },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use('/api/auth/login', authLimiter);
 
-// General API rate limiting
-const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api', apiLimiter);
+  // General API limiter.
+  const apiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+  app.use('/api', apiLimiter);
+}
 
 // Request logging for API routes
 app.use((req, res, next) => {

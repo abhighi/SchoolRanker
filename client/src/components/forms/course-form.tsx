@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCourseSchema, type InsertCourse, type Course } from "@shared/schema";
@@ -26,30 +27,39 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
     queryKey: ["/api/teachers"],
   });
 
+  const getDefaultValues = (): InsertCourse => (course ? {
+    courseCode: course.courseCode,
+    name: course.name,
+    description: course.description || "",
+    grade: course.grade,
+    subject: course.subject,
+    teacherId: course.teacherId || "",
+    credits: course.credits,
+    schedule: course.schedule,
+    status: course.status as "active" | "inactive",
+  } : {
+    courseCode: "",
+    name: "",
+    description: "",
+    grade: 9,
+    subject: "",
+    teacherId: "",
+    credits: 1,
+    schedule: null,
+    status: "active",
+  });
+
   const form = useForm<InsertCourse>({
     resolver: zodResolver(insertCourseSchema),
-    defaultValues: course ? {
-      courseCode: course.courseCode,
-      name: course.name,
-      description: course.description || "",
-      grade: course.grade,
-      subject: course.subject,
-      teacherId: course.teacherId || "",
-      credits: course.credits,
-      schedule: course.schedule,
-      status: course.status as "active" | "inactive",
-    } : {
-      courseCode: "",
-      name: "",
-      description: "",
-      grade: 9,
-      subject: "",
-      teacherId: "",
-      credits: 1,
-      schedule: null,
-      status: "active",
-    },
+    defaultValues: getDefaultValues(),
   });
+
+  // Re-initialise when the dialog opens or a different course is edited, so the
+  // form pre-fills instead of showing stale values.
+  useEffect(() => {
+    if (open) form.reset(getDefaultValues());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, course]);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertCourse) => apiRequest("POST", "/api/courses", data),
@@ -138,12 +148,12 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="grade">Grade</Label>
-              <Select onValueChange={(value) => form.setValue("grade", parseInt(value))}>
+              <Select value={String(form.watch("grade") ?? "")} onValueChange={(value) => form.setValue("grade", parseInt(value))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select grade" />
                 </SelectTrigger>
                 <SelectContent>
-                  {[9, 10, 11, 12].map((grade) => (
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((grade) => (
                     <SelectItem key={grade} value={grade.toString()}>
                       Grade {grade}
                     </SelectItem>
@@ -157,7 +167,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
             
             <div>
               <Label htmlFor="subject">Subject</Label>
-              <Select onValueChange={(value) => form.setValue("subject", value)}>
+              <Select value={form.watch("subject") ?? ""} onValueChange={(value) => form.setValue("subject", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select subject" />
                 </SelectTrigger>
@@ -193,7 +203,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="teacherId">Assigned Teacher</Label>
-              <Select onValueChange={(value) => form.setValue("teacherId", value)}>
+              <Select value={form.watch("teacherId") ?? ""} onValueChange={(value) => form.setValue("teacherId", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select teacher" />
                 </SelectTrigger>
@@ -209,7 +219,7 @@ export function CourseForm({ open, onOpenChange, course }: CourseFormProps) {
             
             <div>
               <Label htmlFor="status">Status</Label>
-              <Select onValueChange={(value) => form.setValue("status", value as "active" | "inactive")}>
+              <Select value={form.watch("status") ?? "active"} onValueChange={(value) => form.setValue("status", value as "active" | "inactive")}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>

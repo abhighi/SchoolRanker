@@ -12,10 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
+import { quickSortStudentsByGPA, addRankingsToStudents } from "@/lib/ranking";
 import {
   BookOpen, Calendar, ClipboardList,
   CheckCircle, Clock, AlertCircle, FileText, Upload,
-  Trophy, Award, GraduationCap, TrendingUp, Users, Mail
+  Trophy, Award, GraduationCap, TrendingUp, Users, Mail, Presentation
 } from "lucide-react";
 import type { Assignment, AssignmentSubmission, Course, StudentWithGPA, Teacher } from "@shared/schema";
 
@@ -42,8 +43,8 @@ export default function StudentPanel() {
   });
 
   const { data: studentTeachers = [] } = useQuery<Teacher[]>({
-    queryKey: [user?.id ? `/api/students/${user.id}/teachers` : "/api/students/"],
-    enabled: !!user?.id,
+    queryKey: [`/api/students/${studentId}/teachers`],
+    enabled: !!studentId,
   });
 
   const { data: studentsWithGPA = [] } = useQuery<StudentWithGPA[]>({
@@ -149,8 +150,10 @@ export default function StudentPanel() {
     return "text-green-600";
   };
 
-  // Student performance data
-  const currentStudent = studentsWithGPA.find(s => s.id === studentId);
+  // Student performance data — rank the whole cohort (QuickSort) so we can show
+  // this student's real class rank.
+  const rankedStudents = addRankingsToStudents(quickSortStudentsByGPA([...studentsWithGPA]));
+  const currentStudent = rankedStudents.find(s => s.id === studentId);
   const submittedCount = assignments.filter(a => getSubmissionStatus(a.id)).length;
   const overdueCount = assignments.filter(a => {
     const submission = getSubmissionStatus(a.id);
@@ -254,6 +257,45 @@ export default function StudentPanel() {
               </CardContent>
             </Card>
           )}
+
+          {/* My Teachers */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Presentation className="w-5 h-5 mr-2" />
+                My Teachers
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {studentTeachers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Presentation className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No teachers to show yet</p>
+                  <p className="text-sm">Teachers of your enrolled courses will appear here</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {studentTeachers.map((teacher) => (
+                    <div key={teacher.id} className="flex items-center space-x-3 p-4 border rounded-lg">
+                      <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                        <Presentation className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 truncate">
+                          {teacher.firstName} {teacher.lastName}
+                        </p>
+                        <p className="text-sm text-gray-600">{teacher.subject}</p>
+                        <p className="text-xs text-gray-500 flex items-center truncate">
+                          <Mail className="w-3 h-3 mr-1 flex-shrink-0" />
+                          {teacher.email}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Assignments & Homework */}
           <Card>

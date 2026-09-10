@@ -101,6 +101,7 @@ export const users = pgTable("users", {
   role: varchar("role", { length: 20 }).notNull(),
   profileId: varchar("profile_id"),
   status: varchar("status", { length: 20 }).notNull().default("active"),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("users_role_idx").on(table.role),
@@ -150,6 +151,32 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("notifications_user_id_idx").on(table.userId),
+]);
+
+export const announcements = pgTable("announcements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  authorId: varchar("author_id").notNull(),          // users.id of poster
+  authorName: text("author_name").notNull(),         // resolved display name
+  authorRole: varchar("author_role", { length: 20 }).notNull(), // admin | teacher
+  targetGrade: integer("target_grade"),              // null = everyone
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("announcements_target_grade_idx").on(table.targetGrade),
+  index("announcements_author_id_idx").on(table.authorId),
+]);
+
+export const announcementComments = pgTable("announcement_comments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  announcementId: varchar("announcement_id").references(() => announcements.id).notNull(),
+  authorId: varchar("author_id").notNull(),          // users.id of commenter
+  authorName: text("author_name").notNull(),
+  authorRole: varchar("author_role", { length: 20 }).notNull(), // admin | teacher | student
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("announcement_comments_announcement_id_idx").on(table.announcementId),
 ]);
 
 // ───────────────────── Insert Schemas ─────────────────────
@@ -213,7 +240,7 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({
   id: true,
 }).extend({
   totalPoints: z.number().min(1).default(100),
-  type: z.enum(["assignment", "homework", "project"]).default("assignment"),
+  type: z.enum(["assignment", "homework", "project", "quiz", "test"]).default("assignment"),
   status: z.enum(["active", "inactive"]).default("active"),
 });
 
@@ -230,6 +257,30 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 }).extend({
   type: z.enum(["info", "success", "warning", "error"]).default("info"),
   read: z.boolean().default(false),
+});
+
+export const insertAnnouncementSchema = createInsertSchema(announcements).omit({
+  id: true,
+  createdAt: true,
+  authorId: true,
+  authorName: true,
+  authorRole: true,
+}).extend({
+  title: z.string().min(1).max(200),
+  content: z.string().min(1),
+  // Accept a grade 1-12, or null/undefined for "everyone".
+  targetGrade: z.number().int().min(1).max(12).nullable().optional(),
+});
+
+export const insertAnnouncementCommentSchema = createInsertSchema(announcementComments).omit({
+  id: true,
+  createdAt: true,
+  announcementId: true,
+  authorId: true,
+  authorName: true,
+  authorRole: true,
+}).extend({
+  content: z.string().min(1).max(2000),
 });
 
 // ───────────────────── Types ─────────────────────
@@ -254,6 +305,15 @@ export type AssignmentSubmission = typeof assignmentSubmissions.$inferSelect;
 export type InsertAssignmentSubmission = z.infer<typeof insertAssignmentSubmissionSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Announcement = typeof announcements.$inferSelect;
+export type InsertAnnouncement = z.infer<typeof insertAnnouncementSchema>;
+export type AnnouncementComment = typeof announcementComments.$inferSelect;
+export type InsertAnnouncementComment = z.infer<typeof insertAnnouncementCommentSchema>;
+
+// Announcement with embedded comments (for API responses).
+export type AnnouncementWithComments = Announcement & {
+  comments: AnnouncementComment[];
+};
 
 // Calendar Events
 export const calendarEvents = pgTable("calendar_events", {

@@ -47,8 +47,8 @@ export default function Dashboard() {
         <Header 
           title="Dashboard" 
           subtitle="Welcome back! Here's what's happening at your school."
-          onAddClick={() => setShowStudentForm(true)}
-          addButtonText="Add Student"
+          onAddClick={() => setShowTeacherForm(true)}
+          addButtonText="Add Teacher"
         />
         <div className="p-6 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -67,11 +67,11 @@ export default function Dashboard() {
 
   return (
     <div>
-      <Header 
-        title="Dashboard" 
+      <Header
+        title="Dashboard"
         subtitle="Welcome back! Here's what's happening at your school."
-        onAddClick={() => setShowStudentForm(true)}
-        addButtonText="Add Student"
+        onAddClick={() => setShowTeacherForm(true)}
+        addButtonText="Add Teacher"
       />
 
       <div className="p-6 space-y-6">
@@ -229,14 +229,14 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                <Button 
+                <Button
                   className="w-full bg-primary text-white hover:bg-blue-600"
                   onClick={() => setShowStudentForm(true)}
                 >
                   <Users className="w-4 h-4 mr-2" />
                   Add New Student
                 </Button>
-                <Button 
+                <Button
                   className="w-full bg-green-600 text-white hover:bg-green-700"
                   onClick={() => setShowTeacherForm(true)}
                 >
@@ -343,13 +343,13 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <StudentForm 
-        open={showStudentForm} 
-        onOpenChange={setShowStudentForm} 
+      <StudentForm
+        open={showStudentForm}
+        onOpenChange={setShowStudentForm}
       />
-      <TeacherForm 
-        open={showTeacherForm} 
-        onOpenChange={setShowTeacherForm} 
+      <TeacherForm
+        open={showTeacherForm}
+        onOpenChange={setShowTeacherForm}
       />
       <CourseForm 
         open={showCourseForm} 
