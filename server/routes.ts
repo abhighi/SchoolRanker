@@ -242,6 +242,126 @@ async function gradesForSession(session: any): Promise<number[]> {
   return [];
 }
 
+// ───────────────────── Focus-Subject Recommender ─────────────────────
+// A content-based recommendation algorithm. For a given student it ranks the
+// subjects (courses) they are enrolled in by a "focus score" combining three
+// normalized signals, so the student sees where extra effort pays off most.
+// Weights are named constants so the model is easy to explain/defend.
+const FOCUS_WEIGHTS = {
+  absoluteWeakness: 0.5, // how low the student's own average is
+  relativeGap: 0.3,      // how far below the class average they are
+  trendDecline: 0.2,     // how much they slipped from midterm → final
+} as const;
+
+type FocusSubject = {
+  courseId: string;
+  subject: string;
+  grade: number;
+  studentAvgPct: number;   // this student's average % in the subject
+  classAvgPct: number;     // class average % in the subject
+  trend: "up" | "down" | "flat";
+  focusScore: number;      // 0..1, higher = focus here first
+  reason: string;          // human-readable explanation
+};
+
+const clampUnit = (n: number) => Math.max(0, Math.min(1, n));
+const pct = (m: { marks: string; totalMarks: string }) => {
+  const got = parseFloat(m.marks);
+  const total = parseFloat(m.totalMarks);
+  if (!total || isNaN(got) || isNaN(total)) return null;
+  return (got / total) * 100;
+};
+const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+
+// Compute ranked focus subjects for one student from existing marks/courses/
+// enrollments. Returns [] when the student has no marks yet.
+async function computeFocusSubjects(studentId: string): Promise<FocusSubject[]> {
+  const [allMarks, allCourses, enrollments] = await Promise.all([
+    storage.getAllMarks(),
+    storage.getAllCourses(),
+    storage.getEnrollmentsByStudent(studentId),
+  ]);
+
+  const courseById = new Map(allCourses.map(c => [c.id, c]));
+  const enrolledCourseIds = new Set(enrollments.map(e => e.courseId));
+
+  // Group marks by course for class averages, and pick out this student's marks.
+  const classPctByCourse = new Map<string, number[]>();
+  const studentMarksByCourse = new Map<string, typeof allMarks>();
+  for (const m of allMarks) {
+    const p = pct(m);
+    if (p === null) continue;
+    if (!classPctByCourse.has(m.courseId)) classPctByCourse.set(m.courseId, []);
+    classPctByCourse.get(m.courseId)!.push(p);
+    if (m.studentId === studentId) {
+      if (!studentMarksByCourse.has(m.courseId)) studentMarksByCourse.set(m.courseId, []);
+      studentMarksByCourse.get(m.courseId)!.push(m);
+    }
+  }
+
+  const results: FocusSubject[] = [];
+
+  for (const courseId of Array.from(enrolledCourseIds)) {
+    const course = courseById.get(courseId);
+    if (!course) continue;
+    const sMarks = studentMarksByCourse.get(courseId) || [];
+    if (sMarks.length === 0) continue; // no marks in this subject yet
+
+    const studentPcts = sMarks.map(pct).filter((x): x is number => x !== null);
+    const studentAvg = avg(studentPcts);
+    if (studentAvg === null) continue;
+
+    const classAvg = avg(classPctByCourse.get(courseId) || []) ?? studentAvg;
+
+    // Trend: compare midterm vs final where both exist.
+    const midtermMark = sMarks.find(m => m.examType === "midterm");
+    const finalMark = sMarks.find(m => m.examType === "final");
+    const midtermPct = midtermMark ? pct(midtermMark) : null;
+    const finalPct = finalMark ? pct(finalMark) : null;
+    let trend: "up" | "down" | "flat" = "flat";
+    let trendDeclineSignal = 0;
+    if (midtermPct !== null && finalPct !== null) {
+      const delta = finalPct - midtermPct;
+      if (delta > 2) trend = "up";
+      else if (delta < -2) trend = "down";
+      trendDeclineSignal = clampUnit((midtermPct - finalPct) / 100);
+    }
+
+    const absoluteWeakness = clampUnit((100 - studentAvg) / 100);
+    const relativeGap = clampUnit((classAvg - studentAvg) / 100);
+
+    const focusScore =
+      FOCUS_WEIGHTS.absoluteWeakness * absoluteWeakness +
+      FOCUS_WEIGHTS.relativeGap * relativeGap +
+      FOCUS_WEIGHTS.trendDecline * trendDeclineSignal;
+
+    // Human-readable reason: pick the strongest contributing signal.
+    const gapPoints = Math.round(classAvg - studentAvg);
+    let reason: string;
+    if (relativeGap > 0 && gapPoints >= 5) {
+      reason = `${gapPoints}% below the class average`;
+    } else if (trend === "down") {
+      reason = "Score declined since the midterm";
+    } else {
+      reason = `Current average is ${Math.round(studentAvg)}%`;
+    }
+
+    results.push({
+      courseId,
+      subject: course.subject,
+      grade: course.grade,
+      studentAvgPct: Math.round(studentAvg),
+      classAvgPct: Math.round(classAvg),
+      trend,
+      focusScore: Math.round(focusScore * 1000) / 1000,
+      reason,
+    });
+  }
+
+  results.sort((a, b) => b.focusScore - a.focusScore);
+  return results;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
 
   // ───────────────────── Authentication Routes ─────────────────────
@@ -1960,6 +2080,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: "Event deleted successfully" });
     } catch (error) {
       res.status(500).json({ message: "Failed to delete event" });
+    }
+  });
+
+  // ───────────────────── Recommendation Routes ─────────────────────
+
+  // Focus-Subject Recommender.
+  //   - student: their own focus subjects
+  //   - teacher/admin: pass ?studentId=<id>; teachers are limited to students
+  //     enrolled in one of their own courses.
+  app.get("/api/recommendations/focus-subjects", requireAuth, async (req, res) => {
+    try {
+      const role = req.session.userRole;
+      let targetStudentId: string | null = null;
+
+      if (role === "student") {
+        const student = await resolveSessionStudent(req.session);
+        if (!student) return res.json({ studentId: null, generatedAt: new Date().toISOString(), recommendations: [] });
+        targetStudentId = student.id;
+      } else {
+        // teacher/admin must specify which student.
+        const requested = (req.query.studentId as string) || "";
+        if (!requested) {
+          return res.status(400).json({ message: "studentId query parameter is required" });
+        }
+        // Resolve business id (STU-xxxx) or uuid to a concrete student.
+        let student = await storage.getStudent(requested);
+        if (!student) student = await storage.getStudentByStudentId(requested);
+        if (!student) return res.status(404).json({ message: "Student not found" });
+
+        // A teacher may only view students enrolled in one of their courses.
+        if (role === "teacher") {
+          const courseIds = await teacherCourseIdSet(req.session);
+          const enrollments = await storage.getEnrollmentsByStudent(student.id);
+          const shares = enrollments.some(e => courseIds.has(e.courseId));
+          if (!shares) {
+            return res.status(403).json({ message: "You can only view students in your own courses" });
+          }
+        }
+        targetStudentId = student.id;
+      }
+
+      const recommendations = await computeFocusSubjects(targetStudentId);
+      res.json({
+        studentId: targetStudentId,
+        generatedAt: new Date().toISOString(),
+        recommendations,
+      });
+    } catch (error) {
+      console.error("[API] Focus-subject recommendation error:", error);
+      res.status(500).json({ message: "Failed to generate recommendations" });
     }
   });
 

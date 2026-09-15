@@ -16,9 +16,22 @@ import { quickSortStudentsByGPA, addRankingsToStudents } from "@/lib/ranking";
 import {
   BookOpen, Calendar, ClipboardList,
   CheckCircle, Clock, AlertCircle, FileText, Upload,
-  Trophy, Award, GraduationCap, TrendingUp, Users, Mail, Presentation
+  Trophy, Award, GraduationCap, TrendingUp, Users, Mail, Presentation,
+  Target, ArrowUp, ArrowDown, Minus
 } from "lucide-react";
 import type { Assignment, AssignmentSubmission, Course, StudentWithGPA, Teacher } from "@shared/schema";
+
+// Shape returned by the Focus-Subject Recommender endpoint.
+interface FocusSubjectRec {
+  courseId: string;
+  subject: string;
+  grade: number;
+  studentAvgPct: number;
+  classAvgPct: number;
+  trend: "up" | "down" | "flat";
+  focusScore: number;
+  reason: string;
+}
 
 export default function StudentPanel() {
   const [showSubmissionForm, setShowSubmissionForm] = useState(false);
@@ -50,6 +63,12 @@ export default function StudentPanel() {
   const { data: studentsWithGPA = [] } = useQuery<StudentWithGPA[]>({
     queryKey: ["/api/analytics/students-gpa"],
   });
+
+  // Focus-Subject Recommender — content-based ranking of subjects to prioritize.
+  const { data: focusData } = useQuery<{ recommendations: FocusSubjectRec[] }>({
+    queryKey: ["/api/recommendations/focus-subjects"],
+  });
+  const focusSubjects = (focusData?.recommendations ?? []).slice(0, 3);
 
   const submitAssignmentMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/assignment-submissions", data),
@@ -257,6 +276,89 @@ export default function StudentPanel() {
               </CardContent>
             </Card>
           )}
+
+          {/* Recommended Focus Subjects (content-based recommender) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Target className="w-5 h-5 mr-2 text-rose-600" />
+                Recommended Focus Subjects
+              </CardTitle>
+              <p className="text-sm text-gray-500">
+                Where extra effort will help you the most, based on your marks vs. your class.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {focusSubjects.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No recommendations yet</p>
+                  <p className="text-sm">Once you have exam marks, we'll suggest where to focus.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {focusSubjects.map((f, idx) => (
+                    <div key={f.courseId} className="p-4 border rounded-lg" data-testid={`focus-${f.courseId}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="flex items-center justify-center w-6 h-6 rounded-full bg-rose-100 text-rose-700 text-xs font-bold flex-shrink-0">
+                            {idx + 1}
+                          </span>
+                          <span className="font-semibold text-gray-900 truncate">{f.subject}</span>
+                          {f.trend === "down" && (
+                            <Badge className="bg-red-100 text-red-800 flex items-center gap-1">
+                              <ArrowDown className="w-3 h-3" /> Declining
+                            </Badge>
+                          )}
+                          {f.trend === "up" && (
+                            <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
+                              <ArrowUp className="w-3 h-3" /> Improving
+                            </Badge>
+                          )}
+                          {f.trend === "flat" && (
+                            <Badge variant="outline" className="flex items-center gap-1 text-gray-600">
+                              <Minus className="w-3 h-3" /> Steady
+                            </Badge>
+                          )}
+                        </div>
+                        <Badge variant="outline" className="text-rose-700 border-rose-200 flex-shrink-0">
+                          {f.reason}
+                        </Badge>
+                      </div>
+
+                      {/* Your average vs class average */}
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex justify-between text-xs text-gray-600 mb-1">
+                            <span>Your average</span>
+                            <span className="font-medium">{f.studentAvgPct}%</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2">
+                            <div
+                              className="bg-rose-500 h-2 rounded-full"
+                              style={{ width: `${Math.max(0, Math.min(100, f.studentAvgPct))}%` }}
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-xs text-gray-600 mb-1">
+                            <span>Class average</span>
+                            <span className="font-medium">{f.classAvgPct}%</span>
+                          </div>
+                          <div className="w-full bg-gray-100 rounded-full h-2">
+                            <div
+                              className="bg-blue-400 h-2 rounded-full"
+                              style={{ width: `${Math.max(0, Math.min(100, f.classAvgPct))}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* My Teachers */}
           <Card>
